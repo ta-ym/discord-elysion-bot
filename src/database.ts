@@ -1,0 +1,311 @@
+import sqlite3 from 'sqlite3';
+import path from 'path';
+
+export interface User {
+  id: string;
+  discord_id: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Transaction {
+  id: number;
+  from_user_id: string;
+  to_user_id: string;
+  amount: number;
+  type: 'transfer' | 'admin_give' | 'vc_purchase';
+  description: string;
+  created_at: string;
+}
+
+export interface SecretVC {
+  id: number;
+  channel_id: string;
+  creator_id: string;
+  channel_name: string;
+  created_at: string;
+  last_activity: string;
+}
+
+export class Database {
+  private db: sqlite3.Database;
+
+  constructor() {
+    const dbPath = path.join(__dirname, '..', 'data', 'elysion.db');
+    this.db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('Error opening database:', err.message);
+      } else {
+        console.log('Connected to SQLite database');
+        this.initializeTables();
+      }
+    });
+  }
+
+  private initializeTables(): void {
+    // ユーザーテーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        discord_id TEXT UNIQUE NOT NULL,
+        balance INTEGER DEFAULT 10000,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 取引履歴テーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_user_id TEXT,
+        to_user_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('transfer', 'admin_give', 'vc_purchase')),
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // シークレットVCテーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS secret_vcs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id TEXT UNIQUE NOT NULL,
+        creator_id TEXT NOT NULL,
+        channel_name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('Database tables initialized');
+  }
+
+  // ユーザー関連メソッド
+  async getUser(discordId: string): Promise<User | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM users WHERE discord_id = ?',
+        [discordId],
+        (err, row: User) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async createUser(discordId: string): Promise<User> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO users (discord_id) VALUES (?)',
+        [discordId],
+        function(err) {
+          if (err) reject(err);
+          else {
+            // 作成したユーザーを取得
+            resolve({
+              id: this.lastID.toString(),
+              discord_id: discordId,
+              balance: 10000,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      );
+    });
+  }
+
+  async updateUserBalance(discordId: string, newBalance: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
+        [newBalance, discordId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  // 取引履歴関連メソッド
+  async addTransaction(
+    fromUserId: string | null,
+    toUserId: string,
+    amount: number,
+    type: 'transfer' | 'admin_give' | 'vc_purchase',
+    description: string
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+        [fromUserId, toUserId, amount, type, description],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getUserTransactions(discordId: string, limit: number = 10): Promise<Transaction[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM transactions 
+         WHERE from_user_id = ? OR to_user_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT ?`,
+        [discordId, discordId, limit],
+        (err, rows: Transaction[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // シークレットVC関連メソッド
+  async addSecretVC(channelId: string, creatorId: string, channelName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO secret_vcs (channel_id, creator_id, channel_name) VALUES (?, ?, ?)',
+        [channelId, creatorId, channelName],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async updateVCActivity(channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE secret_vcs SET last_activity = CURRENT_TIMESTAMP WHERE channel_id = ?',
+        [channelId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getSecretVC(channelId: string): Promise<SecretVC | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM secret_vcs WHERE channel_id = ?',
+        [channelId],
+        (err, row: SecretVC) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async removeSecretVC(channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'DELETE FROM secret_vcs WHERE channel_id = ?',
+        [channelId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getInactiveVCs(minutesAgo: number = 5): Promise<SecretVC[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM secret_vcs 
+         WHERE datetime(last_activity) <= datetime('now', '-${minutesAgo} minutes')`,
+        (err, rows: SecretVC[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // トランザクション処理
+  async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 送金者の残高チェックと減額
+        this.db.get(
+          'SELECT balance FROM users WHERE discord_id = ?',
+          [fromId],
+          (err, row: any) => {
+            if (err || !row || row.balance < amount) {
+              this.db.run('ROLLBACK');
+              resolve(false);
+              return;
+            }
+
+            // 送金者の残高を減額
+            this.db.run(
+              'UPDATE users SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
+              [amount, fromId],
+              (err) => {
+                if (err) {
+                  this.db.run('ROLLBACK');
+                  reject(err);
+                  return;
+                }
+
+                // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+                this.db.run(
+                  `INSERT INTO users (discord_id, balance) VALUES (?, 10000 + ?)
+                   ON CONFLICT(discord_id) DO UPDATE SET 
+                   balance = balance + ?, updated_at = CURRENT_TIMESTAMP`,
+                  [toId, amount, amount],
+                  (err) => {
+                    if (err) {
+                      this.db.run('ROLLBACK');
+                      reject(err);
+                      return;
+                    }
+
+                    // 取引履歴を記録
+                    this.db.run(
+                      'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+                      [fromId, toId, amount, 'transfer', description],
+                      (err) => {
+                        if (err) {
+                          this.db.run('ROLLBACK');
+                          reject(err);
+                        } else {
+                          this.db.run('COMMIT');
+                          resolve(true);
+                        }
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      });
+    });
+  }
+
+  close(): void {
+    this.db.close((err) => {
+      if (err) {
+        console.error('Error closing database:', err.message);
+      } else {
+        console.log('Database connection closed');
+      }
+    });
+  }
+}
