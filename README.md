@@ -11,6 +11,19 @@ TypeScriptで構築されたDiscordボット。独自のサーバー内通貨「
 - **取引履歴**: `/history` コマンド
 - **管理者機能**: `/give` コマンド（管理者による通貨付与）
 
+### 💼 給与システム
+- **月給制**: `/salary` コマンド（管理者が手動支給）
+- **ロール別月給設定**:
+  - 👑 admin: 30,000 Ru/月（デフォルト）
+  - 🛡️ moderator: 20,000 Ru/月（デフォルト）
+  - ⭐ vip: 15,000 Ru/月（デフォルト）
+  - 💎 premium: 10,000 Ru/月（デフォルト）
+  - 🏃 active: 7,500 Ru/月（デフォルト）
+  - 👤 member: 5,000 Ru/月（デフォルト）
+  - 🌱 newcomer: 2,500 Ru/月（デフォルト）
+- **給与履歴**: `/salary-history` コマンド
+- **給与設定**: `/salary-config` コマンド（管理者専用）
+
 ### 🎪 シークレットVC機能
 - **作成費用**: 500 Ru
 - **利用制限**: 最大2人まで参加可能
@@ -109,6 +122,36 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=85
 指定したユーザーにRu_menを付与します。
 ```
 /give user:@ユーザー名 amount:5000 reason:イベント参加賞
+```
+
+### 💼 月給システムコマンド
+
+#### `/salary` (管理者専用)
+対象ユーザーに月給を支給します。
+```
+/salary user:@ユーザー名 role:admin amount:30000 description:月末支給
+/salary user:@ユーザー名 role:member  # ロール規定額で支給
+/salary user:@ユーザー名  # ユーザーのロールを自動判定して支給
+```
+- 管理者のみ実行可能
+- 月1回まで支給可能（同月内の重複支給は不可）
+- ロール・金額の指定が可能
+- 確認画面でボタンクリックにより実行
+
+#### `/salary-history`
+月給受取履歴を確認します。
+```
+/salary-history user:@ユーザー名 limit:12  # 管理者は他ユーザーの履歴確認可能
+/salary-history limit:6  # 自分の履歴のみ
+```
+
+#### `/salary-config` (管理者専用)
+月給ロール設定を管理します。
+```
+/salary-config list  # 設定一覧表示
+/salary-config set role:admin amount:35000 description:管理者月給
+/salary-config add role:special amount:25000 description:特別ロール
+/salary-config toggle role:vip  # ロールの有効/無効切り替え
 ```
 
 ### 🎪 シークレットVC機能
@@ -270,6 +313,21 @@ CREATE TABLE secret_vcs (
   channel_name TEXT NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**monthly_salary_claims テーブル**
+```sql
+CREATE TABLE monthly_salary_claims (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  role_name TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  claim_month TEXT NOT NULL,  -- YYYY-MM format
+  paid_by TEXT NOT NULL,       -- 支給した管理者のID
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, claim_month) -- 月1回制限
 );
 ```
 
