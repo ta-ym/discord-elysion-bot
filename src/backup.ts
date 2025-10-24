@@ -22,6 +22,11 @@ export class DatabaseBackup {
     try {
       console.log('Creating database backup...');
 
+      // SQLiteの場合のみバックアップ対応
+      if (!this.database) {
+        throw new Error('Database not initialized');
+      }
+
       // 全データを取得（SQLiteの場合のみ実装）
       const backupData: BackupData = {
         users: [],

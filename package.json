@@ -25,13 +25,13 @@
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
-    "sqlite3": "^5.1.6",
-    "pg": "^8.11.3"
+    "pg": "^8.16.3",
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "@types/node": "^20.9.0",
+    "@types/pg": "^8.15.5",
     "@types/sqlite3": "^3.1.11",
-    "@types/pg": "^8.10.9",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
     "@typescript-eslint/parser": "^6.10.0",
     "eslint": "^8.53.0",
