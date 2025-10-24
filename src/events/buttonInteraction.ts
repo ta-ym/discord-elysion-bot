@@ -224,6 +224,70 @@ const buttonInteractionEvent: Event = {
         });
       }
 
+      // 支払いボタン
+      else if (interaction.customId.startsWith('pay_confirm_')) {
+        const parts = interaction.customId.split('_');
+        const userId = parts[2];
+        const amount = parseInt(parts[3]);
+        const timestamp = parts[4];
+
+        // タイムスタンプチェック（5分以内）
+        const now = Date.now();
+        const buttonTime = parseInt(timestamp);
+        if (now - buttonTime > 5 * 60 * 1000) {
+          await interaction.update({
+            content: '❌ この支払い確認は期限切れです。再度コマンドを実行してください。',
+            embeds: [],
+            components: []
+          });
+          return;
+        }
+
+        try {
+          // 支払いを実行
+          await database.adminGiveMoney(interaction.user.id, userId, amount, '管理者特別支給');
+
+          const successEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ 支払い完了')
+            .setDescription('支払いが完了しました！')
+            .addFields(
+              { name: '支払い先', value: `<@${userId}>`, inline: true },
+              { name: '金額', value: `${amount.toLocaleString()} Ru`, inline: true },
+              { name: '支払い者', value: `<@${interaction.user.id}>`, inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ 
+            embeds: [successEmbed], 
+            components: [] 
+          });
+
+          console.log(`[PAY] ${interaction.user.tag} paid ${amount} Ru to ${userId}`);
+        } catch (error) {
+          console.error('Error processing payment:', error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ 支払いエラー')
+            .setDescription(error instanceof Error ? error.message : '支払い処理中にエラーが発生しました。');
+
+          await interaction.update({ 
+            embeds: [errorEmbed], 
+            components: [] 
+          });
+        }
+      }
+
+      // 支払いキャンセルボタン
+      else if (interaction.customId === 'pay_cancel') {
+        await interaction.update({ 
+          content: '❌ 支払いをキャンセルしました。', 
+          embeds: [], 
+          components: [] 
+        });
+      }
+
     } catch (error) {
       console.error('Error in button interaction:', error);
       try {

@@ -131,6 +131,17 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=85
 /give user:@ユーザー名 amount:5000 reason:イベント参加賞
 ```
 
+#### `/pay` (権限者限定)
+特定のメンバーに任意の金額を直接支払います。
+```
+/pay user:@ユーザー名 amount:15000 reason:特別報酬
+/pay user:@ユーザー名 amount:50000 reason:プロジェクト完了
+```
+- 管理者または指定されたロール（最高神、女神、神徒）のみ実行可能
+- 1〜1,000,000 Ruまで指定可能
+- 確認画面でボタンクリックにより実行
+- 月給システムとは独立した支払い機能
+
 ### 💼 月給システムコマンド
 
 #### `/salary` (管理者専用)
