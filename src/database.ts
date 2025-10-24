@@ -31,10 +31,10 @@ export interface SecretVC {
 export interface MonthlySalaryClaim {
   id: number;
   user_id: string;
-  role_name: string;
+  role_id: string;         // Discord ロールID
   amount: number;
-  claim_month: string; // YYYY-MM format
-  paid_by: string; // 支給した管理者のID
+  claim_month: string;     // YYYY-MM format
+  paid_by: string;         // 支給した管理者のID
   description?: string;
   created_at: string;
 }
@@ -96,7 +96,7 @@ export class Database {
       CREATE TABLE IF NOT EXISTS monthly_salary_claims (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT NOT NULL,
-        role_name TEXT NOT NULL,
+        role_id TEXT NOT NULL,
         amount INTEGER NOT NULL,
         claim_month TEXT NOT NULL,
         paid_by TEXT NOT NULL,
@@ -438,7 +438,7 @@ export class Database {
   }
 
   // 月給支給メソッド
-  async payMonthlySalary(userId: string, roleName: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
+  async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
 
     return new Promise((resolve, reject) => {
@@ -497,7 +497,7 @@ export class Database {
                     reject(err);
                     return;
                   }
-                  this.insertMonthlySalaryClaim(userId, roleName, amount, currentMonth, paidBy, description, resolve, reject);
+                  this.insertMonthlySalaryClaim(userId, roleId, amount, currentMonth, paidBy, description, resolve, reject);
                 }
               );
             }
@@ -509,7 +509,7 @@ export class Database {
 
   private insertMonthlySalaryClaim(
     userId: string, 
-    roleName: string, 
+    roleId: string, 
     amount: number, 
     claimMonth: string, 
     paidBy: string, 
@@ -519,8 +519,8 @@ export class Database {
   ): void {
     // 月給支給記録を追加
     this.db.run(
-      'INSERT INTO monthly_salary_claims (user_id, role_name, amount, claim_month, paid_by, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, roleName, amount, claimMonth, paidBy, description || ''],
+      'INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, roleId, amount, claimMonth, paidBy, description || ''],
       (err: any) => {
         if (err) {
           this.db.run('ROLLBACK');
@@ -531,7 +531,7 @@ export class Database {
         // 取引履歴を追加
         this.db.run(
           'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-          [null, userId, amount, 'admin_give', `月給支給 (${roleName}) - ${claimMonth}`],
+          [null, userId, amount, 'admin_give', `月給支給 (${roleId}) - ${claimMonth}`],
           (err: any) => {
             if (err) {
               this.db.run('ROLLBACK');

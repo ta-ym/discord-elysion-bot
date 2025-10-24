@@ -173,13 +173,13 @@ const buttonInteractionEvent: Event = {
       else if (interaction.customId.startsWith('confirm_salary_')) {
         const parts = interaction.customId.split('_');
         const userId = parts[2];
-        const roleName = parts[3];
+        const roleId = parts[3];
         const amount = parseInt(parts[4]);
         const paidBy = parts[5];
 
         try {
           // 支給を実行
-          await database.payMonthlySalary(userId, roleName, amount, paidBy);
+          await database.payMonthlySalary(userId, roleId, amount, paidBy);
 
           const successEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
@@ -187,7 +187,7 @@ const buttonInteractionEvent: Event = {
             .setDescription('月給の支給が完了しました！')
             .addFields(
               { name: '対象ユーザー', value: `<@${userId}>`, inline: true },
-              { name: 'ロール', value: roleName, inline: true },
+              { name: 'ロール', value: `<@&${roleId}>`, inline: true },
               { name: '支給額', value: `${amount.toLocaleString()} Ru`, inline: true },
               { name: '支給者', value: `<@${paidBy}>`, inline: true },
               { name: '支給月', value: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' }), inline: true }
@@ -199,7 +199,7 @@ const buttonInteractionEvent: Event = {
             components: [] 
           });
 
-          console.log(`[MONTHLY SALARY] ${interaction.user.tag} paid ${amount} Ru to ${userId} as ${roleName}`);
+          console.log(`[MONTHLY SALARY] ${interaction.user.tag} paid ${amount} Ru to ${userId} as role ${roleId}`);
         } catch (error) {
           console.error('Error paying monthly salary:', error);
           

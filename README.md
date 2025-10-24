@@ -13,16 +13,23 @@ TypeScriptで構築されたDiscordボット。独自のサーバー内通貨「
 
 ### 💼 給与システム
 - **月給制**: `/salary` コマンド（管理者が手動支給）
-- **ロール別月給設定**:
-  - 👑 admin: 30,000 Ru/月（デフォルト）
-  - 🛡️ moderator: 20,000 Ru/月（デフォルト）
-  - ⭐ vip: 15,000 Ru/月（デフォルト）
-  - 💎 premium: 10,000 Ru/月（デフォルト）
-  - 🏃 active: 7,500 Ru/月（デフォルト）
-  - 👤 member: 5,000 Ru/月（デフォルト）
-  - 🌱 newcomer: 2,500 Ru/月（デフォルト）
+- **ロールID設定**: 実際のDiscordロールIDに基づく給与設定
+- **初期設定例**:
+  - 👑 管理者: 30,000 Ru/月
+  - 🛡️ モデレーター: 20,000 Ru/月
+  - ⭐ VIP: 15,000 Ru/月
+  - 💎 プレミアム: 10,000 Ru/月
+  - 🏃 アクティブ: 7,500 Ru/月
+  - 👤 メンバー: 5,000 Ru/月
+  - 🌱 新規: 2,500 Ru/月
 - **給与履歴**: `/salary-history` コマンド
 - **給与設定**: `/salary-config` コマンド（管理者専用）
+
+#### **設定方法**
+1. Discordで開発者モードを有効化
+2. ロールを右クリック→「IDをコピー」
+3. `src/config/salaryRoles.ts` の `ROLE_ID` 部分を実際のIDに置き換え
+4. または `/salary-config add` コマンドで動的に追加
 
 ### 🎪 シークレットVC機能
 - **作成費用**: 500 Ru
@@ -129,8 +136,8 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=85
 #### `/salary` (管理者専用)
 対象ユーザーに月給を支給します。
 ```
-/salary user:@ユーザー名 role:admin amount:30000 description:月末支給
-/salary user:@ユーザー名 role:member  # ロール規定額で支給
+/salary user:@ユーザー名 role:@ロール amount:30000 description:月末支給
+/salary user:@ユーザー名 role:@VIP  # ロール規定額で支給
 /salary user:@ユーザー名  # ユーザーのロールを自動判定して支給
 ```
 - 管理者のみ実行可能
@@ -149,9 +156,10 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=85
 月給ロール設定を管理します。
 ```
 /salary-config list  # 設定一覧表示
-/salary-config set role:admin amount:35000 description:管理者月給
-/salary-config add role:special amount:25000 description:特別ロール
-/salary-config toggle role:vip  # ロールの有効/無効切り替え
+/salary-config add role:@特別ロール amount:25000 description:特別ロール
+/salary-config set role:@VIP amount:18000 description:VIP月給増額
+/salary-config remove role:@廃止ロール  # ロール設定削除
+/salary-config toggle role:@一時停止ロール  # 有効/無効切り替え
 ```
 
 ### 🎪 シークレットVC機能
@@ -321,15 +329,62 @@ CREATE TABLE secret_vcs (
 CREATE TABLE monthly_salary_claims (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL,
-  role_name TEXT NOT NULL,
+  role_id TEXT NOT NULL,       -- DiscordロールID
   amount INTEGER NOT NULL,
-  claim_month TEXT NOT NULL,  -- YYYY-MM format
+  claim_month TEXT NOT NULL,   -- YYYY-MM format
   paid_by TEXT NOT NULL,       -- 支給した管理者のID
   description TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, claim_month) -- 月1回制限
 );
 ```
+
+### 月給システム設定
+
+#### 1. ロール設定の管理
+月給対象となるロールを事前に設定する必要があります：
+
+1. **ロールの追加**：
+   ```
+   /salary-config add role:@対象ロール amount:月給額 description:説明
+   ```
+
+2. **ロール給与の設定/変更**：
+   ```
+   /salary-config set role:@対象ロール amount:新金額 description:新説明
+   ```
+
+3. **設定済みロール一覧の確認**：
+   ```
+   /salary-config list
+   ```
+
+#### 2. 月給支給の実行
+設定済みロールに対して月給を支給：
+
+1. **ロール指定支給**：
+   ```
+   /salary user:@ユーザー名 role:@ロール
+   ```
+
+2. **自動ロール判定支給**：
+   ```
+   /salary user:@ユーザー名
+   ```
+   （ユーザーの所持ロールから最高給与のロールを自動選択）
+
+#### 3. ロールID取得方法
+Discord開発者モードでロールIDを取得：
+
+1. Discordの設定 → 詳細設定 → 開発者モードをON
+2. サーバー設定 → ロール → 対象ロールを右クリック → 「IDをコピー」
+3. 取得したIDを`/salary-config`コマンドで設定
+
+#### 4. 注意事項
+- 月給は1ユーザーにつき月1回まで支給可能
+- 同月内の重複支給は自動的に防止されます
+- 管理者権限が必要なコマンド：`/salary`, `/salary-config`
+- ロール設定はデータベースに保存され、bot再起動後も保持されます
 
 ### 新しいコマンドの追加
 

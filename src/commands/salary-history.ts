@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, GuildMember } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
+import { getRoleDisplayName } from '../config/salaryRoles';
 
 const salaryHistoryCommand: Command = {
   data: new SlashCommandBuilder()
@@ -74,9 +75,20 @@ const salaryHistoryCommand: Command = {
           minute: '2-digit'
         });
 
+        // ロール名を取得（設定からまたはDiscordから直接）
+        let roleDisplay = getRoleDisplayName(salary.role_id);
+        if (roleDisplay === salary.role_id && interaction.guild) {
+          try {
+            const role = await interaction.guild.roles.fetch(salary.role_id);
+            roleDisplay = role?.name || `<@&${salary.role_id}>`;
+          } catch {
+            roleDisplay = `<@&${salary.role_id}>`;
+          }
+        }
+
         embed.addFields({
           name: `💰 ${salary.claim_month}`,
-          value: `**受取額:** ${salary.amount.toLocaleString()} Ru\n**ロール:** ${salary.role_name}\n**支給者:** <@${salary.paid_by}>\n**支給日:** ${date} ${time}${salary.description ? `\n**備考:** ${salary.description}` : ''}`,
+          value: `**受取額:** ${salary.amount.toLocaleString()} Ru\n**ロール:** ${roleDisplay}\n**支給者:** <@${salary.paid_by}>\n**支給日:** ${date} ${time}${salary.description ? `\n**備考:** ${salary.description}` : ''}`,
           inline: true
         });
       }
