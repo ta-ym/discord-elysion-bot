@@ -169,6 +169,61 @@ const buttonInteractionEvent: Event = {
         });
       }
 
+      // 月給支給確認ボタン
+      else if (interaction.customId.startsWith('confirm_salary_')) {
+        const parts = interaction.customId.split('_');
+        const userId = parts[2];
+        const roleName = parts[3];
+        const amount = parseInt(parts[4]);
+        const paidBy = parts[5];
+
+        try {
+          // 支給を実行
+          await database.payMonthlySalary(userId, roleName, amount, paidBy);
+
+          const successEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ 月給支給完了')
+            .setDescription('月給の支給が完了しました！')
+            .addFields(
+              { name: '対象ユーザー', value: `<@${userId}>`, inline: true },
+              { name: 'ロール', value: roleName, inline: true },
+              { name: '支給額', value: `${amount.toLocaleString()} Ru`, inline: true },
+              { name: '支給者', value: `<@${paidBy}>`, inline: true },
+              { name: '支給月', value: new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' }), inline: true }
+            )
+            .setTimestamp();
+
+          await interaction.update({ 
+            embeds: [successEmbed], 
+            components: [] 
+          });
+
+          console.log(`[MONTHLY SALARY] ${interaction.user.tag} paid ${amount} Ru to ${userId} as ${roleName}`);
+        } catch (error) {
+          console.error('Error paying monthly salary:', error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ 支給エラー')
+            .setDescription(error instanceof Error ? error.message : '月給支給中にエラーが発生しました。');
+
+          await interaction.update({ 
+            embeds: [errorEmbed], 
+            components: [] 
+          });
+        }
+      }
+
+      // 月給支給キャンセルボタン
+      else if (interaction.customId === 'cancel_salary') {
+        await interaction.update({ 
+          content: '❌ 月給支給をキャンセルしました。', 
+          embeds: [], 
+          components: [] 
+        });
+      }
+
     } catch (error) {
       console.error('Error in button interaction:', error);
       try {

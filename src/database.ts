@@ -28,6 +28,17 @@ export interface SecretVC {
   last_activity: string;
 }
 
+export interface MonthlySalaryClaim {
+  id: number;
+  user_id: string;
+  role_name: string;
+  amount: number;
+  claim_month: string; // YYYY-MM format
+  paid_by: string; // 支給した管理者のID
+  description?: string;
+  created_at: string;
+}
+
 export class Database {
   private db: sqlite3.Database;
 
@@ -77,6 +88,21 @@ export class Database {
         channel_name TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 月給支給テーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS monthly_salary_claims (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        role_name TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        claim_month TEXT NOT NULL,
+        paid_by TEXT NOT NULL,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, claim_month)
       )
     `);
 
@@ -296,6 +322,270 @@ export class Database {
           }
         );
       });
+    });
+  }
+
+  // 給与請求関連メソッド
+  async hasClaimedSalaryToday(userId: string): Promise<boolean> {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD形式
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT id FROM salary_claims WHERE user_id = ? AND claim_date = ?',
+        [userId, today],
+        (err: any, row: any) => {
+          if (err) reject(err);
+          else resolve(!!row);
+        }
+      );
+    });
+  }
+
+  async claimSalary(userId: string, roleId: string, amount: number): Promise<boolean> {
+    const today = new Date().toISOString().split('T')[0];
+    
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 今日既に請求済みかチェック
+        this.db.get(
+          'SELECT id FROM salary_claims WHERE user_id = ? AND claim_date = ?',
+          [userId, today],
+          (err: any, row: any) => {
+            if (err || row) {
+              this.db.run('ROLLBACK');
+              resolve(false);
+              return;
+            }
+
+            // ユーザーの残高を取得/作成
+            this.db.get(
+              'SELECT balance FROM users WHERE discord_id = ?',
+              [userId],
+              (err: any, user: any) => {
+                if (err) {
+                  this.db.run('ROLLBACK');
+                  reject(err);
+                  return;
+                }
+
+                if (!user) {
+                  // ユーザーが存在しない場合は作成
+                  this.db.run(
+                    'INSERT INTO users (discord_id, balance) VALUES (?, ?)',
+                    [userId, 10000 + amount],
+                    (err: any) => {
+                      if (err) {
+                        this.db.run('ROLLBACK');
+                        reject(err);
+                        return;
+                      }
+                      this.insertSalaryClaim(userId, roleId, amount, today, resolve, reject);
+                    }
+                  );
+                } else {
+                  // 既存ユーザーの残高を更新
+                  this.db.run(
+                    'UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
+                    [amount, userId],
+                    (err: any) => {
+                      if (err) {
+                        this.db.run('ROLLBACK');
+                        reject(err);
+                        return;
+                      }
+                      this.insertSalaryClaim(userId, roleId, amount, today, resolve, reject);
+                    }
+                  );
+                }
+              }
+            );
+          }
+        );
+      });
+    });
+  }
+
+  private insertSalaryClaim(userId: string, roleId: string, amount: number, claimDate: string, resolve: Function, reject: Function): void {
+    // 給与請求記録を追加
+    this.db.run(
+      'INSERT INTO salary_claims (user_id, role_id, amount, claim_date) VALUES (?, ?, ?, ?)',
+      [userId, roleId, amount, claimDate],
+      (err: any) => {
+        if (err) {
+          this.db.run('ROLLBACK');
+          reject(err);
+          return;
+        }
+
+        // 取引履歴を追加
+        this.db.run(
+          'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+          [null, userId, amount, 'admin_give', `日次給与 (${roleId})`],
+          (err: any) => {
+            if (err) {
+              this.db.run('ROLLBACK');
+              reject(err);
+            } else {
+              this.db.run('COMMIT');
+              resolve(true);
+            }
+          }
+        );
+      }
+    );
+  }
+
+  // 月給支給メソッド
+  async payMonthlySalary(userId: string, roleName: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
+    const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+
+    return new Promise((resolve, reject) => {
+      this.db.run('BEGIN TRANSACTION');
+      
+      // 今月既に支給済みかチェック
+      this.db.get(
+        'SELECT id FROM monthly_salary_claims WHERE user_id = ? AND claim_month = ?',
+        [userId, currentMonth],
+        (err: any, row: any) => {
+          if (err) {
+            this.db.run('ROLLBACK');
+            reject(err);
+            return;
+          }
+
+          if (row) {
+            this.db.run('ROLLBACK');
+            reject(new Error('今月の給与は既に支給済みです'));
+            return;
+          }
+
+          // ユーザーが存在するか確認
+          this.db.get(
+            'SELECT discord_id FROM users WHERE discord_id = ?',
+            [userId],
+            (err: any, user: any) => {
+              if (err) {
+                this.db.run('ROLLBACK');
+                reject(err);
+                return;
+              }
+
+              if (!user) {
+                // ユーザーが存在しない場合は作成
+                this.db.run(
+                  'INSERT INTO users (discord_id) VALUES (?)',
+                  [userId],
+                  (err: any) => {
+                    if (err) {
+                      this.db.run('ROLLBACK');
+                      reject(err);
+                      return;
+                    }
+                  }
+                );
+              }
+
+              // 残高を更新
+              this.db.run(
+                'UPDATE users SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
+                [amount, userId],
+                (err: any) => {
+                  if (err) {
+                    this.db.run('ROLLBACK');
+                    reject(err);
+                    return;
+                  }
+                  this.insertMonthlySalaryClaim(userId, roleName, amount, currentMonth, paidBy, description, resolve, reject);
+                }
+              );
+            }
+          );
+        }
+      );
+    });
+  }
+
+  private insertMonthlySalaryClaim(
+    userId: string, 
+    roleName: string, 
+    amount: number, 
+    claimMonth: string, 
+    paidBy: string, 
+    description: string | undefined, 
+    resolve: Function, 
+    reject: Function
+  ): void {
+    // 月給支給記録を追加
+    this.db.run(
+      'INSERT INTO monthly_salary_claims (user_id, role_name, amount, claim_month, paid_by, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, roleName, amount, claimMonth, paidBy, description || ''],
+      (err: any) => {
+        if (err) {
+          this.db.run('ROLLBACK');
+          reject(err);
+          return;
+        }
+
+        // 取引履歴を追加
+        this.db.run(
+          'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+          [null, userId, amount, 'admin_give', `月給支給 (${roleName}) - ${claimMonth}`],
+          (err: any) => {
+            if (err) {
+              this.db.run('ROLLBACK');
+              reject(err);
+            } else {
+              this.db.run('COMMIT');
+              resolve(true);
+            }
+          }
+        );
+      }
+    );
+  }
+
+  async getMonthlySalaryHistory(userId: string, limit: number = 12): Promise<MonthlySalaryClaim[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+        [userId, limit],
+        (err: any, rows: MonthlySalaryClaim[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // 全ユーザーの月給履歴を取得（管理者用）
+  async getAllMonthlySalaryHistory(limit: number = 50): Promise<MonthlySalaryClaim[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM monthly_salary_claims ORDER BY created_at DESC LIMIT ?',
+        [limit],
+        (err: any, rows: MonthlySalaryClaim[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // 指定月の支給状況確認
+  async checkMonthlySalaryStatus(userId: string, month?: string): Promise<MonthlySalaryClaim | null> {
+    const targetMonth = month || new Date().toISOString().substring(0, 7);
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = ? AND claim_month = ?',
+        [userId, targetMonth],
+        (err: any, row: MonthlySalaryClaim) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
     });
   }
 
