@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionFlagsBits } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
+import { SALARY_AUTHORIZED_ROLES } from '../utils/permissions';
 
 const createVcCommand: Command = {
   data: new SlashCommandBuilder()
@@ -10,10 +11,15 @@ const createVcCommand: Command = {
       option.setName('name')
         .setDescription('チャンネル名（オプション）')
         .setRequired(false)
-        .setMaxLength(100)),
+        .setMaxLength(100))
+    .addUserOption(option =>
+      option.setName('partner')
+        .setDescription('一緒にVCを使う相手を指定')
+        .setRequired(false)),
   
   async execute(interaction: ChatInputCommandInteraction) {
     const defaultName = interaction.options.getString('name') || `${interaction.user.username}のVC`;
+    const partner = interaction.options.getUser('partner');
     const database = new Database();
     const cost = 500;
     
@@ -40,7 +46,8 @@ const createVcCommand: Command = {
           { name: 'チャンネル名', value: defaultName, inline: true },
           { name: '作成費用', value: `${cost.toLocaleString()} Ru`, inline: true },
           { name: '利用後残高', value: `${(user.balance - cost).toLocaleString()} Ru`, inline: true },
-          { name: '仕様', value: '• 最大2人まで参加可能\n• 5分間無人で自動削除\n• チャンネル名はボタンで変更可能', inline: false }
+          { name: '相手', value: partner ? `<@${partner.id}>` : '指定なし', inline: true },
+          { name: '仕様', value: '• 最大2人まで参加可能\n• 5分間無人で自動削除\n• 運営ロールには常に見える\n• チャンネル名はボタンで変更可能', inline: false }
         )
         .setDescription('シークレットVCを作成しますか？')
         .setTimestamp();
@@ -112,7 +119,26 @@ const createVcCommand: Command = {
                     PermissionFlagsBits.Connect,
                     PermissionFlagsBits.Speak
                   ]
-                }
+                },
+                // 相手が指定されている場合
+                ...(partner ? [{
+                  id: partner.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.Connect,
+                    PermissionFlagsBits.Speak
+                  ]
+                }] : []),
+                // 運営ロール（最高神、女神、神徒）には常に見える権限を付与
+                ...SALARY_AUTHORIZED_ROLES.map(roleId => ({
+                  id: roleId,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.Connect,
+                    PermissionFlagsBits.Speak,
+                    PermissionFlagsBits.ManageChannels // 運営は管理権限も付与
+                  ]
+                }))
               ]
             });
 
@@ -138,9 +164,10 @@ const createVcCommand: Command = {
               .addFields(
                 { name: 'チャンネル', value: `<#${channel.id}>`, inline: true },
                 { name: '作成者', value: `<@${interaction.user.id}>`, inline: true },
+                { name: '相手', value: partner ? `<@${partner.id}>` : '指定なし', inline: true },
                 { name: '参加制限', value: '2人まで', inline: true }
               )
-              .setDescription('以下のボタンからVCの設定を変更できます。')
+              .setDescription('以下のボタンからVCの設定を変更できます。\n運営ロール（最高神・女神・神徒）には常に見える設定になっています。')
               .setTimestamp();
 
             const controlRow = new ActionRowBuilder<ButtonBuilder>()
