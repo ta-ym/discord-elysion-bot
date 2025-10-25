@@ -43,31 +43,10 @@ export class Database {
   private db: sqlite3.Database;
 
   constructor() {
-    // Railway環境ではメモリDBまたはwritableなディレクトリを使用
-    const isProduction = process.env.NODE_ENV === 'production';
-    let dbPath: string;
-    
-    if (isProduction) {
-      // 本番環境：現在のディレクトリにDBファイルを配置
-      dbPath = path.join(process.cwd(), 'elysion.db');
-    } else {
-      // 開発環境：従来のdataディレクトリ
-      dbPath = path.join(__dirname, '..', 'data', 'elysion.db');
-    }
-    
+    const dbPath = path.join(__dirname, '..', 'data', 'elysion.db');
     this.db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err.message);
-        // エラーが発生した場合はメモリDBにフォールバック
-        console.log('Falling back to in-memory database...');
-        this.db = new sqlite3.Database(':memory:', (memErr) => {
-          if (memErr) {
-            console.error('Error creating memory database:', memErr.message);
-          } else {
-            console.log('Connected to in-memory SQLite database');
-            this.initializeTables();
-          }
-        });
       } else {
         console.log('Connected to SQLite database');
         this.initializeTables();
