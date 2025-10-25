@@ -3,6 +3,9 @@ import { Command } from '../types';
 import { Database } from '../database';
 import { SALARY_AUTHORIZED_ROLES } from '../utils/permissions';
 
+// シークレットVC作成用のカテゴリID
+const SECRET_VC_CATEGORY_ID = '1425044725865648148';
+
 const createVcCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('create-vc')
@@ -106,6 +109,7 @@ const createVcCommand: Command = {
             const channel = await guild.channels.create({
               name: defaultName,
               type: ChannelType.GuildVoice,
+              parent: SECRET_VC_CATEGORY_ID, // 指定されたカテゴリID
               userLimit: 2,
               permissionOverwrites: [
                 {
