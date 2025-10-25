@@ -24,14 +24,14 @@ for (const file of commandFiles) {
 }
 
 // Discord APIにコマンドを登録
-const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
+const rest = new REST().setToken(process.env['DISCORD_TOKEN']!);
 
 (async () => {
   try {
     console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
     const data = await rest.put(
-      Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID!, process.env.DISCORD_GUILD_ID!),
+      Routes.applicationGuildCommands(process.env['DISCORD_CLIENT_ID']!, process.env['DISCORD_GUILD_ID']!),
       { body: commands },
     );
 
