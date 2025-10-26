@@ -288,6 +288,56 @@ const buttonInteractionEvent: Event = {
         });
       }
 
+      // 一斉給与詳細結果表示ボタン
+      if (interaction.customId === 'salary_bulk_details') {
+        // 実際の実装では Redis やデータベースから結果を取得
+        const bulkResults = (interaction.message as any).bulkResults || [];
+        
+        if (!bulkResults || bulkResults.length === 0) {
+          await interaction.reply({ 
+            content: '❌ 詳細結果が見つかりません。時間が経過している可能性があります。', 
+            ephemeral: true 
+          });
+          return;
+        }
+
+        // 結果を整理して表示
+        let detailText = '';
+        let totalDisplayed = 0;
+        const maxDisplay = 20; // 表示制限
+
+        for (const roleResult of bulkResults) {
+          if (roleResult.members.length === 0) continue;
+          
+          detailText += `\n**${roleResult.roleName}**\n`;
+          
+          for (const member of roleResult.members) {
+            if (totalDisplayed >= maxDisplay) {
+              detailText += `... (他 ${bulkResults.reduce((sum: number, r: any) => sum + r.members.length, 0) - totalDisplayed}件)\n`;
+              break;
+            }
+            
+            const statusEmoji = member.status === 'success' ? '✅' : 
+                               member.status === 'already_paid' ? '⏭️' : '❌';
+            const amountText = member.amount > 0 ? ` (+${member.amount.toLocaleString()} Ru)` : '';
+            
+            detailText += `${statusEmoji} ${member.username}${amountText}\n`;
+            totalDisplayed++;
+          }
+          
+          if (totalDisplayed >= maxDisplay) break;
+        }
+
+        const detailEmbed = new EmbedBuilder()
+          .setColor('#0099ff')
+          .setTitle('📊 一斉給与支給詳細結果')
+          .setDescription(detailText || '詳細結果がありません。')
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [detailEmbed], ephemeral: true });
+        return;
+      }
+
     } catch (error) {
       console.error('Error in button interaction:', error);
       try {

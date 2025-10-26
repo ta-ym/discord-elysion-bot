@@ -18,97 +18,222 @@ export interface SalaryRoleConfig {
 export const SALARY_ROLES: SalaryRoleConfig[] = [
   // サンプル設定（実際のロールIDに置き換えてください）
   {
-    roleId: '1424768596726251651',           // 実際の管理者ロールIDに置き換え
+    roleId: '1424768596726251651',         
     roleName: '最高神',
     monthlySalary: 500000,
     description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: '1428737130271871147',       // 実際のモデレーターロールIDに置き換え
+    roleId: '1428737130271871147',         
     roleName: '女神',
-    monthlySalary: 300000,
-    description: '女神ロール - サーバー管理補助',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: '1425862683521191937',       // 実際のモデレーターロールIDに置き換え
+    roleId: '1425862683521191937', 
     roleName: '神徒',
-    monthlySalary: 300000,
-    description: '神徒ロール - サーバー管理補助',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: '1430233479064326265',             // 実際のVIPロールIDに置き換え
-    roleName: '祝印管理者',
-    monthlySalary: 200000,
-    description: '祝印管理者ロール - 特別会員',
+    roleId: '1424764701002170368',         
+    roleName: '神官',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: '1425516413354774548',             // 実際のVIPロールIDに置き換え
+    roleId: '1424769583419490394',         
+    roleName: '妖精さん',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425122228688654367',         
+    roleName: '大天使',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1424766502019797054',         
+    roleName: 'ネフィリム',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425516413354774548',         
     roleName: '選定管理者',
-    monthlySalary: 200000,
-    description: '選定管理者ロール - 特別会員',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: '1425516209289302197',             // 実際のVIPロールIDに置き換え
-    roleName: '先導管理者',
-    monthlySalary: 200000,
-    description: '先導管理者ロール - 特別会員',
+    roleId: '1425516078536065084',         
+    roleName: '聖庫管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
-   {
-    roleId: '1429383633990455376',             // 実際のVIPロールIDに置き換え
-    roleName: '先導管理代理',
-    monthlySalary: 150000,
-    description: '先導管理代理ロール - 特別会員',
-    isActive: true
-  },
-   {
-    roleId: '1425521423170011287',             // 実際のVIPロールIDに置き換え
+  {
+    roleId: '1425521423170011287',         
     roleName: '回廊管理者',
-    monthlySalary: 200000,
-    description: '回廊管理者ロール - 特別会員',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
-    {
-    roleId: '1429450537312714762',             // 実際のVIPロールIDに置き換え
+  {
+    roleId: '1425516209289302197',         
+    roleName: '先導管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1430233479064326265',         
+    roleName: '祝印管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1428713909174669312',         
+    roleName: '天使管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425869955647275059',         
+    roleName: '冥界管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1426934729537753269',         
+    roleName: '秘の扉管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425515887435186327',         
+    roleName: '遊戯管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425515923455873215',         
+    roleName: '賭博管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425516036278718626',         
+    roleName: '庭園管理者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1429383633990455376',         
+    roleName: '先導管理代理',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1429450537312714762',         
     roleName: '回廊従者',
-    monthlySalary: 150000,
-    description: '回廊従者ロール - 特別会員',
-    isActive: true
-  },
- 
-  {
-    roleId: 'PREMIUM_ROLE_ID',         // 実際のプレミアムロールIDに置き換え
-    roleName: 'Premium',
-    monthlySalary: 10000,
-    description: 'プレミアムロール - 有料会員',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: 'ACTIVE_ROLE_ID',          // 実際のアクティブロールIDに置き換え
-    roleName: 'Active',
-    monthlySalary: 7500,
-    description: 'アクティブロール - 活発な参加者',
+    roleId: '1426591044140794028',         
+    roleName: '冥界従者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: 'MEMBER_ROLE_ID',          // 実際のメンバーロールIDに置き換え
-    roleName: 'Member',
-    monthlySalary: 5000,
-    description: '一般メンバーロール - 基本給',
+    roleId: '1429450223637364808',         
+    roleName: '天使従者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
   },
   {
-    roleId: 'NEWCOMER_ROLE_ID',        // 実際の新規メンバーロールIDに置き換え
-    roleName: 'Newcomer',
-    monthlySalary: 2500,
-    description: '新規メンバーロール - 試用期間',
+    roleId: '1425535260539617500',         
+    roleName: '先導者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
     isActive: true
-  }
+  },
+  {
+    roleId: '1426197289449553942',         
+    roleName: '先導者見習い',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425518162388062282',         
+    roleName: '上級選定者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425518223293419671',         
+    roleName: '中級選定者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425518333050097724',         
+    roleName: '下級選定者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1425522944708182128',         
+    roleName: '見習い選定者',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1424764397842202676',         
+    roleName: 'Server Booster',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1430596803878981795',         
+    roleName: 'シスター',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
+  {
+    roleId: '1430597622703456389',         
+    roleName: '神父',
+    monthlySalary: 500000,
+    description: '管理者ロール - 最高権限',
+    isActive: true
+  },
 ];
 
 /**
