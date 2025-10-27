@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
 import { Command, Event } from './types';
 import { Database } from './database';
 import { VCManager } from './vcManager';
+import { initializeCurrencyLogger } from './utils/currencyLogger';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -96,7 +97,17 @@ class ElysionBot {
         throw new Error('DISCORD_TOKEN is not defined in environment variables');
       }
 
+      // ボットログイン
       await this.client.login(process.env.DISCORD_TOKEN);
+      
+      // Ready イベントで通貨ロガー初期化
+      this.client.once(Events.ClientReady, () => {
+        console.log('Bot is ready!');
+        // 通貨ロガーを初期化
+        initializeCurrencyLogger(this.client);
+        console.log('Currency logger initialized');
+      });
+
       console.log('Bot started successfully!');
     } catch (error) {
       console.error('Error starting bot:', error);

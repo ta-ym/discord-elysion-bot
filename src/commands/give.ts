@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
+import { getCurrencyLogger } from '../utils/currencyLogger';
 
 const giveCommand: Command = {
   data: new SlashCommandBuilder()
@@ -57,6 +58,19 @@ const giveCommand: Command = {
         'admin_give',
         reason
       );
+
+      // 通貨ログに記録
+      const logger = getCurrencyLogger();
+      if (logger) {
+        await logger.logTransaction({
+          fromUserId: null,
+          toUserId: targetUser.id,
+          amount,
+          type: 'admin_give',
+          description: reason,
+          executedBy: interaction.user.id
+        });
+      }
 
       const embed = new EmbedBuilder()
         .setColor('#00ff00')

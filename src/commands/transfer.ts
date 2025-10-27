@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionR
 import { Command } from '../types';
 import { Database } from '../database';
 import { SecurityUtils, ErrorHandler } from '../utils/security';
+import { getCurrencyLogger } from '../utils/currencyLogger';
 
 const transferCommand: Command = {
   data: new SlashCommandBuilder()
@@ -146,6 +147,18 @@ const transferCommand: Command = {
               amount,
               message
             });
+
+            // 通貨ログに記録
+            const logger = getCurrencyLogger();
+            if (logger) {
+              await logger.logTransaction({
+                fromUserId: interaction.user.id,
+                toUserId: targetUser.id,
+                amount,
+                type: 'transfer',
+                description: message || 'ユーザー間送金'
+              });
+            }
 
             const successEmbed = new EmbedBuilder()
               .setColor('#00ff00')

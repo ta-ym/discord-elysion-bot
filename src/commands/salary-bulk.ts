@@ -3,6 +3,7 @@ import { Command } from '../types';
 import { Database } from '../database';
 import { getActiveSalaryRoles, getRoleDisplayName } from '../config/salaryRoles';
 import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { getCurrencyLogger } from '../utils/currencyLogger';
 
 const salaryBulkCommand: Command = {
   data: new SlashCommandBuilder()
@@ -185,6 +186,31 @@ const salaryBulkCommand: Command = {
         .setDescription('詳細な結果は下のボタンから確認できます。')
         .setTimestamp()
         .setFooter({ text: `実行者: ${interaction.user.username}` });
+
+      // 通貨ログに一括実行サマリーを記録
+      if (totalSuccess > 0) {
+        const logger = getCurrencyLogger();
+        if (logger) {
+          // 成功した取引をまとめてログに記録
+          const successfulTransactions = processResults.flatMap(roleResult =>
+            roleResult.members
+              .filter(member => member.status === 'success')
+              .map(member => ({
+                fromUserId: null,
+                toUserId: member.userId,
+                amount: member.amount,
+                type: 'bulk_salary' as const,
+                description: `一斉給与支給 (${targetMonth})`,
+                executedBy: interaction.user.id
+              }))
+          );
+
+          await logger.logBulkTransactions(
+            successfulTransactions,
+            `📊 一斉給与支給実行 (${targetMonth})`
+          );
+        }
+      }
 
       const detailButton = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(

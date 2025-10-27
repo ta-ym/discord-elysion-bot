@@ -1,6 +1,7 @@
 import { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { Event } from '../types';
 import { Database } from '../database';
+import { getCurrencyLogger } from '../utils/currencyLogger';
 
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -180,6 +181,19 @@ const buttonInteractionEvent: Event = {
         try {
           // 支給を実行
           await database.payMonthlySalary(userId, roleId, amount, paidBy);
+
+          // 通貨ログに記録
+          const logger = getCurrencyLogger();
+          if (logger) {
+            await logger.logTransaction({
+              fromUserId: null,
+              toUserId: userId,
+              amount: amount,
+              type: 'monthly_salary',
+              description: `月給支給 - ロール: ${roleId}`,
+              executedBy: paidBy
+            });
+          }
 
           const successEmbed = new EmbedBuilder()
             .setColor(0x00FF00)

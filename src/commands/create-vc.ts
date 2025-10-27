@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionR
 import { Command } from '../types';
 import { Database } from '../database';
 import { SALARY_AUTHORIZED_ROLES } from '../utils/permissions';
+import { getCurrencyLogger } from '../utils/currencyLogger';
 
 // シークレットVC作成用のカテゴリID
 const SECRET_VC_CATEGORY_ID = '1425044725865648148';
@@ -157,6 +158,18 @@ const createVcCommand: Command = {
               'vc_purchase',
               `シークレットVC作成: ${channel.name}`
             );
+
+            // 通貨ログに記録
+            const logger = getCurrencyLogger();
+            if (logger) {
+              await logger.logTransaction({
+                fromUserId: interaction.user.id,
+                toUserId: interaction.user.id,
+                amount: cost,
+                type: 'vc_purchase',
+                description: `シークレットVC作成: ${channel.name}`
+              });
+            }
 
             // DBにVC情報を記録
             await database.addSecretVC(channel.id, interaction.user.id, channel.name);
