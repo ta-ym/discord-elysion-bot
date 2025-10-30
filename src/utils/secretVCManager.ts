@@ -25,6 +25,22 @@ const SECRET_VC_CATEGORY_ID = '1425044725865648148';
 const VC_CHAT_THREAD_ID = '1432297223647133839';
 
 /**
+ * 時間制限に応じた料金を取得
+ */
+function getCostByDuration(duration: number): number {
+  switch (duration) {
+    case 6:
+      return 5000;
+    case 12:
+      return 10000;
+    case 24:
+      return 30000;
+    default:
+      return 5000;
+  }
+}
+
+/**
  * VC内チャットにVC作成ボタンを送信
  */
 export async function sendVCCreationPanel(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> {
@@ -33,7 +49,7 @@ export async function sendVCCreationPanel(interaction: ChatInputCommandInteracti
     .setTitle('🎪 シークレットVC作成パネル')
     .setDescription('下のボタンをクリックしてシークレットVCを作成できます。')
     .addFields(
-      { name: '💰 作成費用', value: '500 Ru', inline: true },
+      { name: '💰 作成費用', value: '6h: 5,000 Ru | 12h: 10,000 Ru | 24h: 30,000 Ru', inline: false },
       { name: '⏰ 時間制限', value: '6時間/12時間/24時間から選択', inline: true },
       { name: '👥 パートナー', value: '一緒に使う相手を指定可能', inline: true }
     )
@@ -91,9 +107,9 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
       user = await database.createUser(interaction.user.id);
     }
 
-    if (user.balance < 500) {
+    if (user.balance < 5000) {
       await interaction.reply({ 
-        content: `❌ 残高が不足しています。\n必要額: 500 Ru\n現在の残高: ${user.balance.toLocaleString()} Ru`, 
+        content: `❌ 残高が不足しています。\n最低必要額: 5,000 Ru\n現在の残高: ${user.balance.toLocaleString()} Ru`, 
         ephemeral: true 
       });
       return;
@@ -105,9 +121,9 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
       .setTitle('⏰ VC継続時間を選択')
       .setDescription('シークレットVCの継続時間を選択してください。\n指定時間経過後、自動的に削除されます。')
       .addFields(
-        { name: '6時間', value: '500 Ru', inline: true },
-        { name: '12時間', value: '500 Ru', inline: true },
-        { name: '24時間', value: '500 Ru', inline: true }
+        { name: '6時間', value: '5,000 Ru', inline: true },
+        { name: '12時間', value: '10,000 Ru', inline: true },
+        { name: '24時間', value: '30,000 Ru', inline: true }
       );
 
     const timeSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -282,7 +298,7 @@ export async function createSecretVC(
   partnerId?: string
 ): Promise<void> {
   const database = new Database();
-  const cost = 500;
+  const cost = getCostByDuration(duration);
 
   try {
     const guild = interaction.guild;
@@ -292,7 +308,7 @@ export async function createSecretVC(
     let user = await database.getUser(interaction.user.id);
     if (!user || user.balance < cost) {
       await interaction.update({
-        content: '❌ 残高が不足しています。',
+        content: `❌ 残高が不足しています。\n必要額: ${cost.toLocaleString()} Ru\n現在の残高: ${user?.balance?.toLocaleString() || 0} Ru`,
         embeds: [],
         components: []
       });

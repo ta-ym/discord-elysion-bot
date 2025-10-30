@@ -12,7 +12,7 @@ export function createSecretVCPanel() {
     .setTitle('🚪 秘の扉 - シークレットVC作成パネル')
     .setDescription('プライベートな通話空間を作成できます。\n下のボタンをクリックしてシークレットVCを作成しましょう。')
     .addFields(
-      { name: '💰 作成費用', value: '500通貨', inline: true },
+      { name: '💰 作成費用', value: '6h: 5,000 Ru | 12h: 10,000 Ru | 24h: 30,000 Ru', inline: false },
       { name: '⏰ 時間制限', value: '6時間/12時間/24時間', inline: true },
       { name: '👥 パートナー', value: '一緒に使う相手を指定可能', inline: true }
     )
