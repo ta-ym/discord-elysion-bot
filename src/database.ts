@@ -181,10 +181,7 @@ export class Database {
         joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         left_at DATETIME,
         duration_minutes INTEGER,
-        has_angel_role BOOLEAN DEFAULT FALSE,
-        INDEX(user_id),
-        INDEX(joined_at),
-        INDEX(has_angel_role)
+        has_angel_role BOOLEAN DEFAULT FALSE
       )
     `);
 
@@ -198,12 +195,17 @@ export class Database {
         angel_role_minutes INTEGER DEFAULT 0,
         sessions_count INTEGER DEFAULT 0,
         last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, date),
-        INDEX(user_id),
-        INDEX(date),
-        INDEX(angel_role_minutes)
+        UNIQUE(user_id, date)
       )
     `);
+
+    // インデックス作成
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_user_id ON voice_sessions(user_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_joined_at ON voice_sessions(joined_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_angel_role ON voice_sessions(has_angel_role)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_user_id ON voice_time_logs(user_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_date ON voice_time_logs(date)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_angel_minutes ON voice_time_logs(angel_role_minutes)`);
 
     console.log('Database tables initialized');
   }
