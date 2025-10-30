@@ -23,11 +23,11 @@ export const ANGEL_ROLE_CONFIG: AngelRoleConfig = {
   roleId: '1428053870365642863',
   name: '天使',
   rewardRates: {
-    perMinute: 5, // 1分あたり5通貨
+    perMinute: 0.0625, // 1分あたり0.0625通貨（5÷80）
     bonusThresholds: [
-      { minutes: 60, bonus: 100 },   // 1時間で100通貨ボーナス
-      { minutes: 180, bonus: 300 },  // 3時間で300通貨ボーナス
-      { minutes: 360, bonus: 600 },  // 6時間で600通貨ボーナス
+      { minutes: 60, bonus: 1.25 },   // 1時間で1.25通貨ボーナス（100÷80）
+      { minutes: 180, bonus: 3.75 },  // 3時間で3.75通貨ボーナス（300÷80）
+      { minutes: 360, bonus: 7.5 },   // 6時間で7.5通貨ボーナス（600÷80）
     ]
   },
   trackingEnabled: true
@@ -64,7 +64,7 @@ export function calculateVoiceReward(minutes: number): {
   details: string[];
 } {
   const config = ANGEL_ROLE_CONFIG;
-  const baseReward = Math.floor(minutes * config.rewardRates.perMinute);
+  const baseReward = Math.round(minutes * config.rewardRates.perMinute * 100) / 100; // 小数点第2位で四捨五入
   let bonusReward = 0;
   const details: string[] = [];
 
@@ -76,7 +76,7 @@ export function calculateVoiceReward(minutes: number): {
     }
   }
 
-  const totalReward = baseReward + bonusReward;
+  const totalReward = Math.round((baseReward + bonusReward) * 100) / 100; // 小数点第2位で四捨五入
 
   details.unshift(`基本報酬: ${minutes}分 × ${config.rewardRates.perMinute} = ${baseReward}通貨`);
 
