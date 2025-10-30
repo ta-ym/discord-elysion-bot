@@ -2,6 +2,13 @@ import { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Mod
 import { Event } from '../types';
 import { Database } from '../database';
 import { getCurrencyLogger } from '../utils/currencyLogger';
+import { 
+  startVCCreation, 
+  showPartnerList, 
+  showPartnerSearchModal,
+  createSecretVC,
+  deleteSecretVC
+} from '../utils/secretVCManager';
 
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -11,6 +18,38 @@ const buttonInteractionEvent: Event = {
     const database = new Database();
 
     try {
+      // 新しいシークレットVC作成フロー
+      if (interaction.customId === 'create_secret_vc') {
+        await startVCCreation(interaction);
+        return;
+      }
+
+      // VC削除ボタン
+      if (interaction.customId.startsWith('delete_vc_')) {
+        const channelId = interaction.customId.split('_')[2];
+        await deleteSecretVC(interaction, channelId);
+        return;
+      }
+
+      // パートナー選択ボタン
+      if (interaction.customId.startsWith('vc_partner_list_')) {
+        const duration = parseInt(interaction.customId.split('_')[3]);
+        await showPartnerList(interaction, duration);
+        return;
+      }
+
+      if (interaction.customId.startsWith('vc_partner_search_')) {
+        const duration = parseInt(interaction.customId.split('_')[3]);
+        await showPartnerSearchModal(interaction, duration);
+        return;
+      }
+
+      if (interaction.customId.startsWith('vc_no_partner_')) {
+        const duration = parseInt(interaction.customId.split('_')[3]);
+        await createSecretVC(interaction, duration);
+        return;
+      }
+
       // VCリネームボタン
       if (interaction.customId.startsWith('vc_rename_')) {
         const channelId = interaction.customId.split('_')[2];

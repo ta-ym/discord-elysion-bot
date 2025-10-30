@@ -26,6 +26,7 @@ export interface SecretVC {
   channel_name: string;
   created_at: string;
   last_activity: string;
+  expires_at?: string; // 削除予定時刻
 }
 
 export interface MonthlySalaryClaim {
@@ -108,7 +109,8 @@ export class Database {
         creator_id TEXT NOT NULL,
         channel_name TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME
       )
     `);
 
@@ -221,6 +223,19 @@ export class Database {
       this.db.run(
         'INSERT INTO secret_vcs (channel_id, creator_id, channel_name) VALUES (?, ?, ?)',
         [channelId, creatorId, channelName],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async addSecretVCWithExpiry(channelId: string, creatorId: string, channelName: string, expiresAt: Date): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO secret_vcs (channel_id, creator_id, channel_name, expires_at) VALUES (?, ?, ?, ?)',
+        [channelId, creatorId, channelName, expiresAt.toISOString()],
         (err) => {
           if (err) reject(err);
           else resolve();
