@@ -4,6 +4,7 @@ import { Database } from './database';
 import { VCManager } from './vcManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
+import { initializeSecretVCPanel } from './utils/panelManager';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -102,7 +103,7 @@ class ElysionBot {
       await this.client.login(process.env.DISCORD_TOKEN);
       
       // Ready イベントで通貨ロガー初期化
-      this.client.once(Events.ClientReady, () => {
+      this.client.once(Events.ClientReady, async () => {
         console.log('Bot is ready!');
         // 通貨ロガーを初期化
         initializeCurrencyLogger(this.client);
@@ -111,6 +112,10 @@ class ElysionBot {
         // 通話時間追跡システムを初期化
         initializeVoiceTimeTracker(this.client, this.database);
         console.log('Voice time tracker initialized');
+
+        // シークレットVCパネルを初期化
+        await initializeSecretVCPanel(this.client);
+        console.log('Secret VC panel initialized');
       });
 
       console.log('Bot started successfully!');

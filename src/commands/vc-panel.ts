@@ -1,12 +1,12 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
 import { Command } from '../types';
-import { sendVCCreationPanel } from '../utils/secretVCManager';
 import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { resendSecretVCPanel } from '../utils/panelManager';
 
 const vcPanelCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('vc-panel')
-    .setDescription('VC内チャットにシークレットVC作成パネルを送信します（管理者専用）'),
+    .setDescription('秘の扉スレッドにシークレットVC作成パネルを再送信します（管理者専用）'),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;
@@ -21,7 +21,20 @@ const vcPanelCommand: Command = {
     }
 
     try {
-      await sendVCCreationPanel(interaction);
+      const success = await resendSecretVCPanel(interaction.client);
+      
+      if (success) {
+        await interaction.reply({
+          content: '✅ 秘の扉スレッドにシークレットVC作成パネルを再送信しました。',
+          ephemeral: true
+        });
+      } else {
+        await interaction.reply({
+          content: '❌ パネルの送信に失敗しました。スレッドが見つからない可能性があります。',
+          ephemeral: true
+        });
+      }
+
     } catch (error) {
       console.error('VC panel command error:', error);
       await interaction.reply({
