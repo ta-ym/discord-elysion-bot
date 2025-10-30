@@ -3,6 +3,7 @@ import { Command, Event } from './types';
 import { Database } from './database';
 import { VCManager } from './vcManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
+import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -106,6 +107,10 @@ class ElysionBot {
         // 通貨ロガーを初期化
         initializeCurrencyLogger(this.client);
         console.log('Currency logger initialized');
+        
+        // 通話時間追跡システムを初期化
+        initializeVoiceTimeTracker(this.client, this.database);
+        console.log('Voice time tracker initialized');
       });
 
       console.log('Bot started successfully!');

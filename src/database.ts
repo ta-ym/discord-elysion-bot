@@ -50,6 +50,26 @@ export interface PublicVC {
   last_activity: string;
 }
 
+export interface VoiceSession {
+  id: number;
+  user_id: string;
+  channel_id: string;
+  joined_at: string;
+  left_at?: string;
+  duration_minutes?: number;
+  has_angel_role: boolean;
+}
+
+export interface VoiceTimeLog {
+  id: number;
+  user_id: string;
+  date: string; // YYYY-MM-DD format
+  total_minutes: number;
+  angel_role_minutes: number;
+  sessions_count: number;
+  last_updated: string;
+}
+
 export class Database {
   private db: sqlite3.Database;
 
@@ -149,6 +169,39 @@ export class Database {
         description TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, claim_month)
+      )
+    `);
+
+    // 通話セッションテーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS voice_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        left_at DATETIME,
+        duration_minutes INTEGER,
+        has_angel_role BOOLEAN DEFAULT FALSE,
+        INDEX(user_id),
+        INDEX(joined_at),
+        INDEX(has_angel_role)
+      )
+    `);
+
+    // 通話時間ログテーブル（日次集計）
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS voice_time_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        total_minutes INTEGER DEFAULT 0,
+        angel_role_minutes INTEGER DEFAULT 0,
+        sessions_count INTEGER DEFAULT 0,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, date),
+        INDEX(user_id),
+        INDEX(date),
+        INDEX(angel_role_minutes)
       )
     `);
 
@@ -416,6 +469,53 @@ export class Database {
 
                 this.db.run('COMMIT', (err) => {
                   if (err) {
+                    this.db.run('ROLLBACK');
+                    reject(err);
+                  } else {
+                    resolve();
+                  }
+                });
+              }
+            );
+          }
+        );
+      });
+    });
+  }
+
+  // システムによる支給（管理者IDなし）
+  async giveMoney(toId: string, amount: number, description: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.serialize(() => {
+        this.db.run('BEGIN TRANSACTION');
+        
+        // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+        this.db.run(
+          `INSERT INTO users (discord_id, balance) VALUES (?, 10000 + ?)
+           ON CONFLICT(discord_id) DO UPDATE SET 
+           balance = balance + ?, updated_at = CURRENT_TIMESTAMP`,
+          [toId, amount, amount],
+          (err) => {
+            if (err) {
+              this.db.run('ROLLBACK');
+              reject(err);
+              return;
+            }
+
+            // 取引履歴を記録
+            this.db.run(
+              'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+              [null, toId, amount, 'admin_give', description],
+              (err) => {
+                if (err) {
+                  this.db.run('ROLLBACK');
+                  reject(err);
+                  return;
+                }
+
+                this.db.run('COMMIT', (err) => {
+                  if (err) {
+                    this.db.run('ROLLBACK');
                     reject(err);
                   } else {
                     resolve();
@@ -756,6 +856,125 @@ export class Database {
           else resolve();
         }
       );
+    });
+  }
+
+  // 通話セッション関連メソッド
+  async startVoiceSession(userId: string, channelId: string, hasAngelRole: boolean): Promise<number> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO voice_sessions (user_id, channel_id, has_angel_role) VALUES (?, ?, ?)',
+        [userId, channelId, hasAngelRole],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+  }
+
+  async endVoiceSession(sessionId: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE voice_sessions 
+         SET left_at = CURRENT_TIMESTAMP,
+             duration_minutes = ROUND((julianday(CURRENT_TIMESTAMP) - julianday(joined_at)) * 24 * 60)
+         WHERE id = ?`,
+        [sessionId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getActiveVoiceSession(userId: string, channelId: string): Promise<VoiceSession | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM voice_sessions WHERE user_id = ? AND channel_id = ? AND left_at IS NULL ORDER BY joined_at DESC LIMIT 1',
+        [userId, channelId],
+        (err, row: VoiceSession) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async updateVoiceTimeLog(userId: string, date: string, additionalMinutes: number, angelRoleMinutes: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `INSERT INTO voice_time_logs (user_id, date, total_minutes, angel_role_minutes, sessions_count)
+         VALUES (?, ?, ?, ?, 1)
+         ON CONFLICT(user_id, date) DO UPDATE SET
+           total_minutes = total_minutes + ?,
+           angel_role_minutes = angel_role_minutes + ?,
+           sessions_count = sessions_count + 1,
+           last_updated = CURRENT_TIMESTAMP`,
+        [userId, date, additionalMinutes, angelRoleMinutes, additionalMinutes, angelRoleMinutes],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getVoiceTimeStats(userId: string, startDate?: string, endDate?: string): Promise<VoiceTimeLog[]> {
+    return new Promise((resolve, reject) => {
+      let query = 'SELECT * FROM voice_time_logs WHERE user_id = ?';
+      const params: any[] = [userId];
+
+      if (startDate) {
+        query += ' AND date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        query += ' AND date <= ?';
+        params.push(endDate);
+      }
+
+      query += ' ORDER BY date DESC';
+
+      this.db.all(query, params, (err, rows: VoiceTimeLog[]) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+  }
+
+  async getAngelRoleVoiceStats(startDate?: string, endDate?: string): Promise<{
+    user_id: string;
+    total_angel_minutes: number;
+    total_sessions: number;
+  }[]> {
+    return new Promise((resolve, reject) => {
+      let query = `
+        SELECT 
+          user_id,
+          SUM(angel_role_minutes) as total_angel_minutes,
+          SUM(sessions_count) as total_sessions
+        FROM voice_time_logs 
+        WHERE angel_role_minutes > 0
+      `;
+      const params: any[] = [];
+
+      if (startDate) {
+        query += ' AND date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        query += ' AND date <= ?';
+        params.push(endDate);
+      }
+
+      query += ' GROUP BY user_id ORDER BY total_angel_minutes DESC';
+
+      this.db.all(query, params, (err, rows: any[]) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
     });
   }
 
