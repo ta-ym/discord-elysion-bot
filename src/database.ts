@@ -40,6 +40,16 @@ export interface MonthlySalaryClaim {
   created_at: string;
 }
 
+export interface PublicVC {
+  id: number;
+  channel_id: string;
+  creator_id: string;
+  channel_name: string;
+  description?: string;
+  created_at: string;
+  last_activity: string;
+}
+
 export class Database {
   private db: sqlite3.Database;
 
@@ -111,6 +121,19 @@ export class Database {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME
+      )
+    `);
+
+    // 公開VCテーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS public_vcs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id TEXT UNIQUE NOT NULL,
+        creator_id TEXT NOT NULL,
+        channel_name TEXT NOT NULL,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -665,6 +688,72 @@ export class Database {
         (err: any, row: MonthlySalaryClaim) => {
           if (err) reject(err);
           else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  // 公開VC関連メソッド
+  async addPublicVC(channelId: string, creatorId: string, channelName: string, description?: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO public_vcs (channel_id, creator_id, channel_name, description) VALUES (?, ?, ?, ?)',
+        [channelId, creatorId, channelName, description || null],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getPublicVC(channelId: string): Promise<PublicVC | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM public_vcs WHERE channel_id = ?',
+        [channelId],
+        (err, row: PublicVC) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async getActivePublicVCs(): Promise<PublicVC[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM public_vcs ORDER BY created_at DESC',
+        [],
+        (err, rows: PublicVC[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  async removePublicVC(channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'DELETE FROM public_vcs WHERE channel_id = ?',
+        [channelId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async updatePublicVC(channelId: string, channelName: string, description?: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE public_vcs SET channel_name = ?, description = ?, last_activity = CURRENT_TIMESTAMP WHERE channel_id = ?',
+        [channelName, description || null, channelId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
         }
       );
     });

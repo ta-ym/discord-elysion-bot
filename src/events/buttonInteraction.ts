@@ -9,6 +9,12 @@ import {
   createSecretVC,
   deleteSecretVC
 } from '../utils/secretVCManager';
+import {
+  showPublicVCCreationModal,
+  showPublicVCList,
+  deletePublicVC,
+  showPublicVCEditModal
+} from '../utils/publicVCManager';
 
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -24,7 +30,32 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
-      // VC削除ボタン
+      // 公開VC作成・管理
+      if (interaction.customId === 'create_public_vc') {
+        await showPublicVCCreationModal(interaction);
+        return;
+      }
+
+      if (interaction.customId === 'list_public_vcs') {
+        await showPublicVCList(interaction);
+        return;
+      }
+
+      // 公開VC削除
+      if (interaction.customId.startsWith('delete_public_vc_')) {
+        const channelId = interaction.customId.split('_')[3];
+        await deletePublicVC(interaction, channelId);
+        return;
+      }
+
+      // 公開VC設定変更
+      if (interaction.customId.startsWith('edit_public_vc_')) {
+        const channelId = interaction.customId.split('_')[3];
+        await showPublicVCEditModal(interaction, channelId);
+        return;
+      }
+
+      // VC削除ボタン（シークレットVC）
       if (interaction.customId.startsWith('delete_vc_')) {
         const channelId = interaction.customId.split('_')[2];
         await deleteSecretVC(interaction, channelId);

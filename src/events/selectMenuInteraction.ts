@@ -4,6 +4,10 @@ import {
   handleDurationSelection,
   createSecretVC
 } from '../utils/secretVCManager';
+import { 
+  createPublicVC
+} from '../utils/publicVCManager';
+import { Database } from '../database';
 
 const selectMenuInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -60,6 +64,46 @@ const selectMenuInteractionEvent: Event = {
         }
 
         await createSecretVC(interaction, duration, partnerId);
+        return;
+      }
+
+      // 公開VC作成モーダル
+      if (interaction.isModalSubmit() && interaction.customId === 'public_vc_creation_modal') {
+        const vcName = interaction.fields.getTextInputValue('vc_name');
+        const vcDescription = interaction.fields.getTextInputValue('vc_description');
+        
+        await createPublicVC(interaction, vcName, vcDescription || undefined);
+        return;
+      }
+
+      // 公開VC編集モーダル
+      if (interaction.isModalSubmit() && interaction.customId.startsWith('public_vc_edit_modal_')) {
+        const channelId = interaction.customId.split('_')[4];
+        const vcName = interaction.fields.getTextInputValue('vc_name');
+        const vcDescription = interaction.fields.getTextInputValue('vc_description');
+        
+        const database = new Database();
+        try {
+          // チャンネル名を更新
+          const channel = await interaction.guild?.channels.fetch(channelId);
+          if (channel && 'setName' in channel) {
+            await channel.setName(vcName);
+          }
+
+          // データベースを更新
+          await database.updatePublicVC(channelId, vcName, vcDescription || undefined);
+
+          await interaction.reply({
+            content: '✅ 公開VCの設定を更新しました。',
+            ephemeral: true
+          });
+        } catch (error) {
+          console.error('公開VC更新エラー:', error);
+          await interaction.reply({
+            content: '❌ 設定の更新に失敗しました。',
+            ephemeral: true
+          });
+        }
         return;
       }
 
