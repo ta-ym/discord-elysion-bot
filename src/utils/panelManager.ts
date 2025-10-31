@@ -1,7 +1,7 @@
-import { Client, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, ThreadChannel, ChannelType } from 'discord.js';
+import { Client, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, TextChannel, ThreadChannel } from 'discord.js';
 
 // 秘の扉スレッドID
-const SECRET_DOOR_THREAD_ID = '1433217562195525725';
+const SECRET_DOOR_THREAD_ID = '1433800545231044789';
 
 /**
  * シークレットVC作成パネルを作成
@@ -35,11 +35,11 @@ export function createSecretVCPanel() {
 }
 
 /**
- * 指定されたスレッドにパネルが既に存在するかチェック
+ * 指定されたチャンネルにパネルが既に存在するかチェック
  */
-export async function hasExistingPanel(thread: TextChannel | ThreadChannel): Promise<boolean> {
+export async function hasExistingPanel(channel: TextChannel | ThreadChannel): Promise<boolean> {
   try {
-    const messages = await thread.messages.fetch({ limit: 50 });
+    const messages = await channel.messages.fetch({ limit: 50 });
     
     return messages.some(message => {
       if (!message.author.bot) return false;
@@ -61,29 +61,28 @@ export async function initializeSecretVCPanel(client: Client): Promise<void> {
   try {
     console.log('Initializing Secret VC panel...');
     
-    // スレッドを取得
+    // チャンネルを取得
     const channel = await client.channels.fetch(SECRET_DOOR_THREAD_ID);
     
     if (!channel) {
-      console.warn(`Secret door thread not found: ${SECRET_DOOR_THREAD_ID}`);
+      console.warn(`Secret door channel not found: ${SECRET_DOOR_THREAD_ID}`);
       return;
     }
 
-    if (channel.type !== ChannelType.PublicThread && channel.type !== ChannelType.PrivateThread) {
-      console.warn(`Channel ${SECRET_DOOR_THREAD_ID} is not a thread`);
+    // テキストチャンネルまたはスレッドかチェック
+    if (!('send' in channel)) {
+      console.warn(`Channel ${SECRET_DOOR_THREAD_ID} cannot send messages`);
       return;
     }
 
-    const thread = channel as ThreadChannel;
-    
     // 古いパネルを削除
-    await deleteOldPanels(thread);
+    await deleteOldPanels(channel as any);
     
     // 新しいパネルを送信
     const panelData = createSecretVCPanel();
-    await thread.send(panelData);
+    await channel.send(panelData);
     
-    console.log(`Secret VC panel sent to thread: ${SECRET_DOOR_THREAD_ID}`);
+    console.log(`Secret VC panel sent to channel: ${SECRET_DOOR_THREAD_ID}`);
     
   } catch (error) {
     console.error('Error initializing Secret VC panel:', error);
@@ -93,10 +92,10 @@ export async function initializeSecretVCPanel(client: Client): Promise<void> {
 /**
  * 古いパネルを削除
  */
-async function deleteOldPanels(thread: ThreadChannel): Promise<void> {
+async function deleteOldPanels(channel: TextChannel | ThreadChannel): Promise<void> {
   try {
     console.log('Deleting old panels...');
-    const messages = await thread.messages.fetch({ limit: 50 });
+    const messages = await channel.messages.fetch({ limit: 50 });
     
     for (const message of messages.values()) {
       if (!message.author.bot) continue;
@@ -121,18 +120,16 @@ export async function resendSecretVCPanel(client: Client): Promise<boolean> {
   try {
     const channel = await client.channels.fetch(SECRET_DOOR_THREAD_ID);
     
-    if (!channel || (channel.type !== ChannelType.PublicThread && channel.type !== ChannelType.PrivateThread)) {
+    if (!channel || !('send' in channel)) {
       return false;
     }
 
-    const thread = channel as ThreadChannel;
-    
     // 古いパネルを削除
-    await deleteOldPanels(thread);
+    await deleteOldPanels(channel as any);
     
     // 新しいパネルを送信
     const panelData = createSecretVCPanel();
-    await thread.send(panelData);
+    await channel.send(panelData);
     
     return true;
   } catch (error) {
