@@ -76,15 +76,10 @@ export async function initializeSecretVCPanel(client: Client): Promise<void> {
 
     const thread = channel as ThreadChannel;
     
-    // 既存のパネルがあるかチェック
-    const hasPanel = await hasExistingPanel(thread);
+    // 古いパネルを削除
+    await deleteOldPanels(thread);
     
-    if (hasPanel) {
-      console.log('Secret VC panel already exists in the thread');
-      return;
-    }
-
-    // パネルを送信
+    // 新しいパネルを送信
     const panelData = createSecretVCPanel();
     await thread.send(panelData);
     
@@ -92,6 +87,30 @@ export async function initializeSecretVCPanel(client: Client): Promise<void> {
     
   } catch (error) {
     console.error('Error initializing Secret VC panel:', error);
+  }
+}
+
+/**
+ * 古いパネルを削除
+ */
+async function deleteOldPanels(thread: ThreadChannel): Promise<void> {
+  try {
+    console.log('Deleting old panels...');
+    const messages = await thread.messages.fetch({ limit: 50 });
+    
+    for (const message of messages.values()) {
+      if (!message.author.bot) continue;
+      if (!message.embeds.length) continue;
+      
+      const embed = message.embeds[0];
+      if (embed.title?.includes('秘の扉') && embed.title?.includes('シークレットVC作成パネル')) {
+        console.log(`Deleting old panel message: ${message.id}`);
+        await message.delete();
+      }
+    }
+    console.log('Old panels deleted');
+  } catch (error) {
+    console.error('Error deleting old panels:', error);
   }
 }
 
@@ -107,6 +126,11 @@ export async function resendSecretVCPanel(client: Client): Promise<boolean> {
     }
 
     const thread = channel as ThreadChannel;
+    
+    // 古いパネルを削除
+    await deleteOldPanels(thread);
+    
+    // 新しいパネルを送信
     const panelData = createSecretVCPanel();
     await thread.send(panelData);
     

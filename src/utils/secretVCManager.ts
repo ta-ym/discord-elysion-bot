@@ -22,8 +22,6 @@ import { getCurrencyLogger } from '../utils/currencyLogger';
 
 // シークレットVC作成用のカテゴリID
 const SECRET_VC_CATEGORY_ID = '1425044725865648148';
-// VC内チャットのスレッドID
-const VC_CHAT_THREAD_ID = '1432297223647133839';
 
 /**
  * 時間制限に応じた料金を取得
@@ -77,73 +75,35 @@ async function generateSecretVCName(guild: Guild): Promise<string> {
 }
 
 /**
- * VC内チャットにVC作成ボタンを送信
+ * VC内チャットにVC作成ボタンを送信 (DEPRECATED - Use panelManager instead)
  */
 export async function sendVCCreationPanel(interaction: ChatInputCommandInteraction | ButtonInteraction): Promise<void> {
-  const embed = new EmbedBuilder()
-    .setColor('#9b59b6')
-    .setTitle('🎪 シークレットVC作成パネル')
-    .setDescription('下のボタンをクリックしてシークレットVCを作成できます。')
-    .addFields(
-      { name: '💰 作成費用', value: '6h: 5,000 Ru | 12h: 10,000 Ru | 24h: 30,000 Ru', inline: false },
-      { name: '⏰ 時間制限', value: '6時間/12時間/24時間から選択', inline: true },
-      { name: '👥 パートナー', value: '一緒に使う相手を指定可能', inline: true }
-    )
-    .setFooter({ text: '作成後、指定した時間経過で自動削除されます' });
-
-  const button = new ActionRowBuilder<ButtonBuilder>()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId('create_secret_vc')
-        .setLabel('シークレットVC作成')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🎪')
-    );
-
-  try {
-    const channel = await interaction.client.channels.fetch(VC_CHAT_THREAD_ID);
-    if (channel && 'send' in channel) {
-      await channel.send({ embeds: [embed], components: [button] });
-      
-      if (interaction.isRepliable()) {
-        await interaction.reply({ 
-          content: '✅ VC作成パネルをVC内チャットに送信しました。', 
-          ephemeral: true 
-        });
-      }
-    } else {
-      if (interaction.isRepliable()) {
-        await interaction.reply({ 
-          content: '❌ VC内チャットが見つかりません。', 
-          ephemeral: true 
-        });
-      }
-    }
-  } catch (error) {
-    console.error('VC作成パネル送信エラー:', error);
-    if (interaction.isRepliable()) {
-      await interaction.reply({ 
-        content: '❌ VC作成パネルの送信に失敗しました。', 
-        ephemeral: true 
-      });
-    }
-  }
+  console.warn('[DEPRECATED] sendVCCreationPanel is deprecated. Use panelManager instead.');
+  await interaction.reply({
+    content: '❌ この機能は廃止されました。管理者に連絡してください。',
+    ephemeral: true
+  });
 }
 
 /**
  * VC作成プロセスを開始
  */
 export async function startVCCreation(interaction: ButtonInteraction): Promise<void> {
+  console.log(`[DEBUG] startVCCreation called by ${interaction.user.tag}`);
   const database = new Database();
   
   try {
+    console.log(`[DEBUG] Checking user balance for ${interaction.user.id}`);
     // ユーザーの残高確認
     let user = await database.getUser(interaction.user.id);
     if (!user) {
+      console.log(`[DEBUG] User not found, creating new user: ${interaction.user.id}`);
       user = await database.createUser(interaction.user.id);
     }
 
+    console.log(`[DEBUG] User balance: ${user.balance}`);
     if (user.balance < 5000) {
+      console.log(`[DEBUG] Insufficient balance: ${user.balance} < 5000`);
       await interaction.reply({ 
         content: `❌ 残高が不足しています。\n最低必要額: 5,000 Ru\n現在の残高: ${user.balance.toLocaleString()} Ru`, 
         ephemeral: true 
@@ -151,6 +111,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
       return;
     }
 
+    console.log(`[DEBUG] Creating time selection embed`);
     // 時間制限選択画面
     const timeEmbed = new EmbedBuilder()
       .setColor('#e74c3c')
@@ -162,6 +123,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
         { name: '24時間', value: '30,000 Ru', inline: true }
       );
 
+    console.log(`[DEBUG] Creating time selection menu`);
     const timeSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
       .addComponents(
         new StringSelectMenuBuilder()
@@ -186,18 +148,33 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
           )
       );
 
+    console.log(`[DEBUG] Sending reply with time selection`);
     await interaction.reply({
       embeds: [timeEmbed],
       components: [timeSelect],
       ephemeral: true
     });
+    console.log(`[DEBUG] Reply sent successfully`);
 
   } catch (error) {
     console.error('VC作成開始エラー:', error);
-    await interaction.reply({ 
-      content: '❌ エラーが発生しました。', 
-      ephemeral: true 
-    });
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ 
+          content: '❌ エラーが発生しました。', 
+          ephemeral: true 
+        });
+      } else {
+        await interaction.followUp({ 
+          content: '❌ エラーが発生しました。', 
+          ephemeral: true 
+        });
+      }
+    } catch (replyError) {
+      console.error('Error sending error reply:', replyError);
+    }
   }
 }
 
@@ -205,41 +182,63 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
  * 時間選択後のパートナー選択画面
  */
 export async function handleDurationSelection(interaction: MessageComponentInteraction): Promise<void> {
-  if (!interaction.isStringSelectMenu()) return;
+  console.log(`[DEBUG] handleDurationSelection called by ${interaction.user.tag}`);
+  if (!interaction.isStringSelectMenu()) {
+    console.log(`[DEBUG] Not a string select menu interaction`);
+    return;
+  }
   
   const duration = parseInt(interaction.values[0]);
+  console.log(`[DEBUG] Selected duration: ${duration} hours`);
   
-  const partnerEmbed = new EmbedBuilder()
-    .setColor('#3498db')
-    .setTitle('👥 パートナー選択')
-    .setDescription(`継続時間: **${duration}時間**\n\n一緒にVCを使う相手を選択してください。`)
-    .addFields(
-      { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索', inline: false }
-    );
+  try {
+    const partnerEmbed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('👥 パートナー選択')
+      .setDescription(`継続時間: **${duration}時間**\n\n一緒にVCを使う相手を選択してください。`)
+      .addFields(
+        { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索', inline: false }
+      );
 
-  const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`vc_partner_list_${duration}`)
-        .setLabel('メンバー一覧から選択')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📋'),
-      new ButtonBuilder()
-        .setCustomId(`vc_partner_search_${duration}`)
-        .setLabel('ユーザー名/IDで検索')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔍'),
-      new ButtonBuilder()
-        .setCustomId(`vc_no_partner_${duration}`)
-        .setLabel('パートナーなしで作成')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('👤')
-    );
+    const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`vc_partner_list_${duration}`)
+          .setLabel('メンバー一覧から選択')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('📋'),
+        new ButtonBuilder()
+          .setCustomId(`vc_partner_search_${duration}`)
+          .setLabel('ユーザー名/IDで検索')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔍'),
+        new ButtonBuilder()
+          .setCustomId(`vc_no_partner_${duration}`)
+          .setLabel('パートナーなしで作成')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('👤')
+      );
 
-  await interaction.update({
-    embeds: [partnerEmbed],
-    components: [partnerButtons]
-  });
+    console.log(`[DEBUG] Updating interaction with partner selection`);
+    await interaction.update({
+      embeds: [partnerEmbed],
+      components: [partnerButtons]
+    });
+    console.log(`[DEBUG] Partner selection update successful`);
+  } catch (error) {
+    console.error('Error in handleDurationSelection:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    
+    try {
+      await interaction.update({
+        content: '❌ エラーが発生しました。',
+        embeds: [],
+        components: []
+      });
+    } catch (updateError) {
+      console.error('Error updating interaction:', updateError);
+    }
+  }
 }
 
 /**

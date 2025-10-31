@@ -25,7 +25,7 @@ const vcPanelCommand: Command = {
       
       if (success) {
         await interaction.reply({
-          content: '✅ 秘の扉スレッドにシークレットVC作成パネルを再送信しました。',
+          content: '✅ 秘の扉スレッドにシークレットVC作成パネルを再送信しました。\n（古いパネルがあれば削除されました）',
           ephemeral: true
         });
       } else {

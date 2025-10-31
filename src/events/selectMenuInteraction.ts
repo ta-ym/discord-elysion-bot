@@ -17,6 +17,7 @@ const selectMenuInteractionEvent: Event = {
     try {
       // 時間選択メニュー
       if (interaction.isStringSelectMenu() && interaction.customId === 'vc_duration_select') {
+        console.log(`[DEBUG] vc_duration_select triggered by ${interaction.user.tag}, values: ${interaction.values}`);
         await handleDurationSelection(interaction);
         return;
       }

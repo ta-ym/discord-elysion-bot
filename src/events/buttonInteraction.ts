@@ -26,6 +26,7 @@ const buttonInteractionEvent: Event = {
     try {
       // 新しいシークレットVC作成フロー
       if (interaction.customId === 'create_secret_vc') {
+        console.log(`[DEBUG] create_secret_vc button clicked by ${interaction.user.tag}`);
         await startVCCreation(interaction);
         return;
       }
