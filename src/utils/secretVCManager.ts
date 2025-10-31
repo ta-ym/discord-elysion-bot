@@ -11,6 +11,7 @@ import {
   StringSelectMenuOptionBuilder,
   ChatInputCommandInteraction,
   MessageComponentInteraction,
+  ModalSubmitInteraction,
   ChannelType,
   PermissionFlagsBits,
   GuildMember,
@@ -998,16 +999,21 @@ export async function showSimplePartnerModal(interaction: ButtonInteraction, dur
  * 最終的なVC作成処理
  */
 export async function createSecretVC(
-  interaction: MessageComponentInteraction, 
+  interaction: MessageComponentInteraction | ModalSubmitInteraction, 
   duration: number, 
   partnerId?: string
 ): Promise<void> {
   console.log(`[DEBUG] createSecretVC called by ${interaction.user.tag}, duration: ${duration}, partnerId: ${partnerId}`);
   
   try {
-    // 先に応答を返してタイムアウトを防ぐ
-    await interaction.deferUpdate();
-    console.log(`[DEBUG] Interaction deferred for VC creation`);
+    // モーダル送信の場合はすでにdeferReply済み、ボタンの場合はdeferUpdateが必要
+    const isModalSubmit = 'isModalSubmit' in interaction && interaction.isModalSubmit();
+    
+    if (!isModalSubmit) {
+      // ボタンからの場合のみdeferUpdate
+      await interaction.deferUpdate();
+      console.log(`[DEBUG] Interaction deferred for VC creation`);
+    }
     
     const database = new Database();
     const cost = getCostByDuration(duration);
@@ -1058,7 +1064,9 @@ export async function createSecretVC(
       try {
         console.log(`[DEBUG] Fetching partner: ${partnerId}`);
         partner = await guild.members.fetch(partnerId);
-        console.log(`[DEBUG] Partner found: ${partner.displayName}`);
+        if (partner) {
+          console.log(`[DEBUG] Partner found: ${partner.displayName}`);
+        }
       } catch {
         console.log(`[DEBUG] Partner not found: ${partnerId}`);
         await interaction.editReply({
@@ -1169,14 +1177,14 @@ export async function createSecretVC(
           .setEmoji('🗑️')
       );
 
-    await interaction.update({
+    await interaction.editReply({
       embeds: [successEmbed],
       components: [controlRow]
     });
 
   } catch (error) {
     console.error('VC作成エラー:', error);
-    await interaction.update({
+    await interaction.editReply({
       content: '❌ VC作成中にエラーが発生しました。',
       embeds: [],
       components: []
