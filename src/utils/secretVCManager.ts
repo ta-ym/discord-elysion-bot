@@ -405,6 +405,7 @@ async function handlePartnerSelectionError(interaction: MessageComponentInteract
  */
 export async function handleDurationButtonSelection(interaction: ButtonInteraction, duration: number): Promise<void> {
   console.log(`[DEBUG] handleDurationButtonSelection called by ${interaction.user.tag} for ${duration} hours`);
+  console.log(`[DEBUG] Button interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
   
   const userId = interaction.user.id;
   const currentTime = Date.now();
@@ -418,24 +419,81 @@ export async function handleDurationButtonSelection(interaction: ButtonInteracti
   
   // 処理開始をマーク
   processingUsers.set(userId, currentTime);
+  console.log(`[DEBUG] Processing user ${userId} marked at ${currentTime}`);
   
   // 3秒後に自動的にフラグを削除
   setTimeout(() => {
     processingUsers.delete(userId);
+    console.log(`[DEBUG] Processing flag removed for user ${userId}`);
   }, 3000);
   
   try {
     // 即座にdeferして3秒タイムアウトを回避
     console.log(`[DEBUG] About to defer button interaction...`);
+    console.log(`[DEBUG] Interaction type: ${interaction.type}, customId: ${interaction.customId}`);
+    
     await interaction.deferUpdate();
     console.log(`[DEBUG] Button interaction deferred successfully`);
     
-    // 非同期で処理を実行
+    // 料金確認を先に実行
+    console.log(`[DEBUG] Checking cost and balance before partner selection...`);
+    const cost = getCostByDuration(duration);
+    console.log(`[DEBUG] Cost for ${duration} hours: ${cost}`);
+    
+    const database = new Database();
+    let user = await database.getUser(interaction.user.id);
+    if (!user) {
+      console.log(`[DEBUG] User not found, creating new user`);
+      user = await database.createUser(interaction.user.id);
+    }
+    
+    console.log(`[DEBUG] User balance: ${user.balance}, Required: ${cost}`);
+    
+    // 残高不足の場合は即座に処理
+    if (user.balance < cost) {
+      console.log(`[DEBUG] Insufficient balance, showing error immediately`);
+      const insufficientEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ 残高不足')
+        .setDescription(`選択した時間制限（${duration}時間）に必要な残高が不足しています。`)
+        .addFields(
+          { name: '必要額', value: `${cost.toLocaleString()} Ru`, inline: true },
+          { name: '現在の残高', value: `${user.balance.toLocaleString()} Ru`, inline: true },
+          { name: '不足額', value: `${(cost - user.balance).toLocaleString()} Ru`, inline: true }
+        );
+
+      const backButton = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('back_to_vc_creation')
+            .setLabel('VC作成に戻る')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔙')
+        );
+
+      await interaction.editReply({
+        embeds: [insufficientEmbed],
+        components: [backButton]
+      });
+      return;
+    }
+    
+    // 残高が十分な場合は非同期でパートナー選択処理
+    console.log(`[DEBUG] Balance sufficient, proceeding to partner selection...`);
     setImmediate(async () => {
       try {
-        await processPartnerSelection(interaction, duration);
+        console.log(`[DEBUG] Starting processPartnerSelection in setImmediate...`);
+        await processPartnerSelectionForButton(interaction, duration);
+        console.log(`[DEBUG] processPartnerSelection completed successfully`);
       } catch (error) {
         console.error('Error in processPartnerSelection (button):', error);
+        console.error('Error details:', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : 'No stack',
+          userId: interaction.user.id,
+          duration: duration
+        });
         await handlePartnerSelectionError(interaction, error, duration);
       }
     });
@@ -449,25 +507,81 @@ export async function handleDurationButtonSelection(interaction: ButtonInteracti
       userId: interaction.user.id,
       duration: duration,
       deferred: interaction.deferred,
-      replied: interaction.replied
+      replied: interaction.replied,
+      interactionType: interaction.type,
+      customId: interaction.customId
     });
     
     // エラー時の緊急処理
     try {
       if (!interaction.replied && !interaction.deferred) {
+        console.log(`[DEBUG] Attempting emergency reply (not deferred)`);
         await interaction.update({
           content: '❌ エラーが発生しました。再度お試しください。',
           embeds: [],
           components: []
         });
+      } else if (interaction.deferred && !interaction.replied) {
+        console.log(`[DEBUG] Attempting emergency editReply (deferred)`);
+        await interaction.editReply({
+          content: '❌ エラーが発生しました。再度お試しください。',
+          embeds: [],
+          components: []
+        });
+      } else {
+        console.log(`[DEBUG] Cannot send emergency message - replied: ${interaction.replied}, deferred: ${interaction.deferred}`);
       }
     } catch (updateError) {
       console.error('Failed to send emergency error message (button):', updateError);
     } finally {
       // エラー時もフラグを削除
       processingUsers.delete(userId);
+      console.log(`[DEBUG] Processing flag removed for user ${userId} (error cleanup)`);
     }
   }
+}
+
+/**
+ * パートナー選択処理（ボタン用）
+ */
+async function processPartnerSelectionForButton(interaction: ButtonInteraction, duration: number): Promise<void> {
+  console.log(`[DEBUG] processPartnerSelectionForButton started for duration: ${duration}`);
+  
+  const partnerEmbed = new EmbedBuilder()
+    .setColor('#3498db')
+    .setTitle('👥 パートナー選択')
+    .setDescription(`継続時間: **${duration}時間**\n\n一緒にVCを使う相手を選択してください。`)
+    .addFields(
+      { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索\n• パートナーなしで作成', inline: false }
+    );
+
+  console.log(`[DEBUG] Partner embed created, creating buttons`);
+
+  const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`vc_partner_list_${duration}`)
+        .setLabel('メンバー一覧から選択')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📋'),
+      new ButtonBuilder()
+        .setCustomId(`vc_partner_search_${duration}`)
+        .setLabel('ユーザー名/IDで検索')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔍'),
+      new ButtonBuilder()
+        .setCustomId(`vc_no_partner_${duration}`)
+        .setLabel('パートナーなしで作成')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👤')
+    );
+
+  console.log(`[DEBUG] Buttons created, updating interaction with partner selection`);
+  await interaction.editReply({
+    embeds: [partnerEmbed],
+    components: [partnerButtons]
+  });
+  console.log(`[DEBUG] Partner selection update successful`);
 }
 
 /**
