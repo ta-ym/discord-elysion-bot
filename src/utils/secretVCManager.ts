@@ -163,7 +163,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
           .setCustomId('vc_test_create')
           .setLabel('テストVC作成')
           .setStyle(ButtonStyle.Secondary)
-          .setEmoji('🧪'),
+          .setEmoji('👥'),
         new ButtonBuilder()
           .setCustomId('vc_duration_6')
           .setLabel('6時間 (5,000 Ru)')
@@ -177,7 +177,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
           .setCustomId('vc_duration_12')
           .setLabel('12時間 (10,000 Ru)')
           .setStyle(ButtonStyle.Primary)
-          .setEmoji('🕐'),
+          .setEmoji('👥'),
         new ButtonBuilder()
           .setCustomId('vc_duration_24')
           .setLabel('24時間 (30,000 Ru)')
@@ -348,12 +348,12 @@ async function processPartnerSelection(interaction: MessageComponentInteraction,
         .setCustomId(`vc_partner_list_${duration}`)
         .setLabel('メンバー一覧から選択')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📋'),
+        .setEmoji('👥'),
       new ButtonBuilder()
         .setCustomId(`vc_partner_search_${duration}`)
         .setLabel('ユーザー名/IDで検索')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔍'),
+        .setEmoji('👥'),
       new ButtonBuilder()
         .setCustomId(`vc_no_partner_${duration}`)
         .setLabel('パートナーなしで作成')
@@ -565,13 +565,11 @@ async function processPartnerSelectionForButton(interaction: ButtonInteraction, 
       new ButtonBuilder()
         .setCustomId(`vc_with_partner_${duration}`)
         .setLabel('パートナーありで作成')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('�'),
+        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`vc_no_partner_${duration}`)
         .setLabel('パートナーなしで作成')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('�')
     );
 
   const backButton = new ActionRowBuilder<ButtonBuilder>()
@@ -580,7 +578,6 @@ async function processPartnerSelectionForButton(interaction: ButtonInteraction, 
         .setCustomId('back_to_vc_creation')
         .setLabel('時間選択に戻る')
         .setStyle(ButtonStyle.Secondary)
-        .setEmoji('�')
     );
 
   console.log(`[DEBUG] Buttons created, updating interaction with simple partner selection`);
@@ -807,12 +804,12 @@ export async function showPartnerList(interaction: ButtonInteraction, duration: 
             .setCustomId(`vc_partner_search_${duration}`)
             .setLabel('ユーザー名/IDで検索')
             .setStyle(ButtonStyle.Secondary)
-            .setEmoji('🔍'),
+            .setEmoji('👥'),
           new ButtonBuilder()
             .setCustomId(`vc_no_partner_${duration}`)
             .setLabel('パートナーなしで作成')
             .setStyle(ButtonStyle.Primary)
-            .setEmoji('👤'),
+            .setEmoji('👥'),
           new ButtonBuilder()
             .setCustomId('back_to_vc_creation')
             .setLabel('戻る')
