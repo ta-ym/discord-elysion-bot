@@ -152,7 +152,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
     await interaction.reply({
       embeds: [timeEmbed],
       components: [timeSelect],
-      ephemeral: true
+      flags: 64 // MessageFlags.Ephemeral
     });
     console.log(`[DEBUG] Reply sent successfully`);
 
@@ -193,16 +193,60 @@ export async function handleDurationSelection(interaction: MessageComponentInter
   
   try {
     // 先に応答を返してタイムアウトを防ぐ
+    console.log(`[DEBUG] About to defer interaction...`);
     await interaction.deferUpdate();
     console.log(`[DEBUG] Interaction deferred successfully`);
+    
+    // 料金確認と残高チェック
+    console.log(`[DEBUG] Getting cost for duration: ${duration}`);
+    const cost = getCostByDuration(duration);
+    console.log(`[DEBUG] Cost calculated: ${cost}`);
+    
+    console.log(`[DEBUG] Creating database instance...`);
+    const database = new Database();
+    console.log(`[DEBUG] Database instance created`);
+    
+    console.log(`[DEBUG] Checking user balance for cost: ${cost}`);
+    let user = await database.getUser(interaction.user.id);
+    if (!user) {
+      console.log(`[DEBUG] User not found, creating new user`);
+      user = await database.createUser(interaction.user.id);
+    }
+    
+    console.log(`[DEBUG] User balance: ${user.balance}, Required: ${cost}`);
+    
+    // 残高不足の場合
+    if (user.balance < cost) {
+      console.log(`[DEBUG] Insufficient balance`);
+      const insufficientEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ 残高不足')
+        .setDescription(`選択した時間制限（${duration}時間）に必要な残高が不足しています。`)
+        .addFields(
+          { name: '必要額', value: `${cost.toLocaleString()} Ru`, inline: true },
+          { name: '現在の残高', value: `${user.balance.toLocaleString()} Ru`, inline: true },
+          { name: '不足額', value: `${(cost - user.balance).toLocaleString()} Ru`, inline: true }
+        );
+
+      console.log(`[DEBUG] Sending insufficient balance message`);
+      await interaction.editReply({
+        embeds: [insufficientEmbed],
+        components: []
+      });
+      return;
+    }
+    
+    console.log(`[DEBUG] Balance sufficient, creating partner selection embed`);
     
     const partnerEmbed = new EmbedBuilder()
       .setColor('#3498db')
       .setTitle('👥 パートナー選択')
-      .setDescription(`継続時間: **${duration}時間**\n\n一緒にVCを使う相手を選択してください。`)
+      .setDescription(`継続時間: **${duration}時間** (${cost.toLocaleString()} Ru)\n\n一緒にVCを使う相手を選択してください。`)
       .addFields(
-        { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索', inline: false }
+        { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索\n• パートナーなしで作成', inline: false }
       );
+
+    console.log(`[DEBUG] Partner embed created, creating buttons`);
 
     const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
@@ -223,7 +267,7 @@ export async function handleDurationSelection(interaction: MessageComponentInter
           .setEmoji('👤')
       );
 
-    console.log(`[DEBUG] Updating interaction with partner selection`);
+    console.log(`[DEBUG] Buttons created, updating interaction with partner selection`);
     await interaction.editReply({
       embeds: [partnerEmbed],
       components: [partnerButtons]
@@ -232,13 +276,21 @@ export async function handleDurationSelection(interaction: MessageComponentInter
   } catch (error) {
     console.error('Error in handleDurationSelection:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      userId: interaction.user.id,
+      duration: duration
+    });
     
     try {
       const errorEmbed = new EmbedBuilder()
         .setColor('#ff0000')
         .setTitle('❌ エラーが発生しました')
-        .setDescription('処理中にエラーが発生しました。しばらく待ってから再度お試しください。');
+        .setDescription(`処理中にエラーが発生しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`);
         
+      console.log(`[DEBUG] Attempting to send error message, deferred: ${interaction.deferred}`);
+      
       if (interaction.deferred) {
         await interaction.editReply({
           embeds: [errorEmbed],
@@ -250,8 +302,10 @@ export async function handleDurationSelection(interaction: MessageComponentInter
           components: []
         });
       }
+      console.log(`[DEBUG] Error message sent successfully`);
     } catch (updateError) {
-      console.error('Error updating interaction:', updateError);
+      console.error('Error updating interaction after error:', updateError);
+      console.error('Update error stack:', updateError instanceof Error ? updateError.stack : 'No stack available');
     }
   }
 }
@@ -347,17 +401,49 @@ export async function createSecretVC(
   duration: number, 
   partnerId?: string
 ): Promise<void> {
-  const database = new Database();
-  const cost = getCostByDuration(duration);
-
+  console.log(`[DEBUG] createSecretVC called by ${interaction.user.tag}, duration: ${duration}, partnerId: ${partnerId}`);
+  
   try {
+    // 先に応答を返してタイムアウトを防ぐ
+    await interaction.deferUpdate();
+    console.log(`[DEBUG] Interaction deferred for VC creation`);
+    
+    const database = new Database();
+    const cost = getCostByDuration(duration);
     const guild = interaction.guild;
-    if (!guild) return;
+    
+    if (!guild) {
+      console.log(`[DEBUG] Guild not found`);
+      await interaction.editReply({
+        content: '❌ サーバー情報が取得できませんでした。',
+        embeds: [],
+        components: []
+      });
+      return;
+    }
+
+    console.log(`[DEBUG] Starting VC creation process...`);
+    
+    // 進行状況を表示
+    const progressEmbed = new EmbedBuilder()
+      .setColor('#ffff00')
+      .setTitle('🔄 シークレットVC作成中...')
+      .setDescription('しばらくお待ちください。')
+      .addFields(
+        { name: '継続時間', value: `${duration}時間`, inline: true },
+        { name: '費用', value: `${cost.toLocaleString()} Ru`, inline: true }
+      );
+      
+    await interaction.editReply({
+      embeds: [progressEmbed],
+      components: []
+    });
 
     // 再度残高確認
     let user = await database.getUser(interaction.user.id);
     if (!user || user.balance < cost) {
-      await interaction.update({
+      console.log(`[DEBUG] Insufficient balance during creation`);
+      await interaction.editReply({
         content: `❌ 残高が不足しています。\n必要額: ${cost.toLocaleString()} Ru\n現在の残高: ${user?.balance?.toLocaleString() || 0} Ru`,
         embeds: [],
         components: []
@@ -369,9 +455,12 @@ export async function createSecretVC(
     let partner: GuildMember | undefined;
     if (partnerId) {
       try {
+        console.log(`[DEBUG] Fetching partner: ${partnerId}`);
         partner = await guild.members.fetch(partnerId);
+        console.log(`[DEBUG] Partner found: ${partner.displayName}`);
       } catch {
-        await interaction.update({
+        console.log(`[DEBUG] Partner not found: ${partnerId}`);
+        await interaction.editReply({
           content: '❌ 指定されたユーザーが見つかりません。',
           embeds: [],
           components: []
