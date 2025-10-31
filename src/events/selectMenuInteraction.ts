@@ -40,9 +40,27 @@ const selectMenuInteractionEvent: Event = {
 
       // メンバー選択メニュー
       if (interaction.isStringSelectMenu() && interaction.customId.startsWith('vc_member_select_')) {
-        const duration = parseInt(interaction.customId.split('_')[3]);
-        const partnerId = interaction.values[0];
-        await createSecretVC(interaction, duration, partnerId);
+        console.log(`[DEBUG] vc_member_select triggered by ${interaction.user.tag}, values: ${interaction.values}`);
+        console.log(`[DEBUG] User ID: ${interaction.user.id}, Guild ID: ${interaction.guild?.id}`);
+        console.log(`[DEBUG] Interaction details - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+        
+        try {
+          const duration = parseInt(interaction.customId.split('_')[3]);
+          const partnerId = interaction.values[0];
+          console.log(`[DEBUG] Extracted duration: ${duration}, partner ID: ${partnerId}`);
+          
+          console.log(`[DEBUG] Starting createSecretVC with partner...`);
+          await createSecretVC(interaction, duration, partnerId);
+          console.log(`[DEBUG] createSecretVC completed successfully`);
+        } catch (error) {
+          console.error(`[DEBUG] Error in member selection:`, error);
+          console.error(`[DEBUG] Error details:`, {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : 'No stack trace'
+          });
+          throw error; // Re-throw to be caught by outer try-catch
+        }
         return;
       }
 

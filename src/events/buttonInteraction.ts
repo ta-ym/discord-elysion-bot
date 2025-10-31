@@ -65,6 +65,15 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // パートナー選択に戻るボタン
+      if (interaction.customId.startsWith('back_to_partner_selection_')) {
+        console.log(`[DEBUG] back_to_partner_selection button clicked by ${interaction.user.tag}`);
+        const duration = parseInt(interaction.customId.split('_')[4]);
+        console.log(`[DEBUG] Duration extracted for back navigation: ${duration}`);
+        await handleDurationButtonSelection(interaction, duration);
+        return;
+      }
+
       // 公開VC作成・管理
       if (interaction.customId === 'create_public_vc') {
         await showPublicVCCreationModal(interaction);

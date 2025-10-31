@@ -752,60 +752,156 @@ export async function deleteTestVC(interaction: ButtonInteraction, channelId: st
  * メンバー一覧からパートナーを選択
  */
 export async function showPartnerList(interaction: ButtonInteraction, duration: number): Promise<void> {
+  console.log(`[DEBUG] showPartnerList called by ${interaction.user.tag} for duration: ${duration}`);
+  console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+  
   const guild = interaction.guild;
-  if (!guild) return;
+  if (!guild) {
+    console.error('[DEBUG] Guild not found in showPartnerList');
+    return;
+  }
 
   try {
+    // 即座にdeferして3秒タイムアウトを回避
+    console.log(`[DEBUG] About to defer showPartnerList interaction...`);
+    await interaction.deferUpdate();
+    console.log(`[DEBUG] showPartnerList interaction deferred successfully`);
+
+    console.log(`[DEBUG] Fetching guild members...`);
     // アクティブなメンバーを取得（最近オンラインだったメンバー）
-    const members = await guild.members.fetch({ limit: 25 });
+    const members = await guild.members.fetch({ limit: 50 });
+    console.log(`[DEBUG] Fetched ${members.size} members from guild`);
+    
     const activeMembers = members
-      .filter(member => 
-        !member.user.bot && 
-        member.user.id !== interaction.user.id &&
-        member.presence?.status !== 'offline'
-      )
+      .filter(member => {
+        const isBot = member.user.bot;
+        const isSelf = member.user.id === interaction.user.id;
+        const isOffline = member.presence?.status === 'offline';
+        
+        console.log(`[DEBUG] Member ${member.user.username}: bot=${isBot}, self=${isSelf}, offline=${isOffline}`);
+        
+        return !isBot && !isSelf && !isOffline;
+      })
       .first(20); // 最大20人まで
 
+    console.log(`[DEBUG] Found ${activeMembers.length} active members`);
+
     if (activeMembers.length === 0) {
-      await interaction.reply({
-        content: '❌ アクティブなメンバーが見つかりませんでした。検索機能をお使いください。',
-        ephemeral: true
+      console.log(`[DEBUG] No active members found, showing fallback message`);
+      
+      const noMembersEmbed = new EmbedBuilder()
+        .setColor('#ff9900')
+        .setTitle('⚠️ アクティブなメンバーが見つかりません')
+        .setDescription('現在オンラインのメンバーが見つかりませんでした。\n検索機能またはパートナーなしでの作成をお試しください。');
+
+      const fallbackButtons = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`vc_partner_search_${duration}`)
+            .setLabel('ユーザー名/IDで検索')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔍'),
+          new ButtonBuilder()
+            .setCustomId(`vc_no_partner_${duration}`)
+            .setLabel('パートナーなしで作成')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('👤'),
+          new ButtonBuilder()
+            .setCustomId('back_to_vc_creation')
+            .setLabel('戻る')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔙')
+        );
+
+      await interaction.editReply({
+        embeds: [noMembersEmbed],
+        components: [fallbackButtons]
       });
       return;
     }
 
+    console.log(`[DEBUG] Creating member selection menu with ${activeMembers.length} options`);
     const memberSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
       .addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`vc_member_select_${duration}`)
           .setPlaceholder('パートナーを選択してください')
           .addOptions(
-            activeMembers.map(member => 
-              new StringSelectMenuOptionBuilder()
+            activeMembers.map(member => {
+              console.log(`[DEBUG] Adding member option: ${member.displayName} (${member.user.id})`);
+              return new StringSelectMenuOptionBuilder()
                 .setLabel(member.displayName)
                 .setDescription(`@${member.user.username}`)
                 .setValue(member.user.id)
-                .setEmoji('👤')
-            )
+                .setEmoji('👤');
+            })
           )
       );
 
     const embed = new EmbedBuilder()
       .setColor('#2ecc71')
       .setTitle('👥 メンバー一覧')
-      .setDescription('パートナーとして追加したいメンバーを選択してください。');
+      .setDescription(`パートナーとして追加したいメンバーを選択してください。\n\n継続時間: **${duration}時間**`)
+      .addFields(
+        { name: 'アクティブメンバー数', value: `${activeMembers.length}人`, inline: true },
+        { name: '選択可能', value: '最大20人まで表示', inline: true }
+      );
 
-    await interaction.update({
+      const backButton = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`back_to_partner_selection_${duration}`)
+            .setLabel('パートナー選択に戻る')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔙')
+        );    console.log(`[DEBUG] Updating interaction with member list`);
+    await interaction.editReply({
       embeds: [embed],
-      components: [memberSelect]
+      components: [memberSelect, backButton]
     });
+    console.log(`[DEBUG] Member list update successful`);
 
   } catch (error) {
-    console.error('メンバー一覧取得エラー:', error);
-    await interaction.reply({
-      content: '❌ メンバー一覧の取得に失敗しました。',
-      ephemeral: true
+    console.error('Error in showPartnerList:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+      userId: interaction.user.id,
+      duration: duration,
+      deferred: interaction.deferred,
+      replied: interaction.replied
     });
+    
+    try {
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ メンバー一覧取得エラー')
+        .setDescription(`メンバー一覧の取得に失敗しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`);
+
+      const backButton = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(`back_to_partner_selection_${duration}`)
+            .setLabel('パートナー選択に戻る')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔙')
+        );
+
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({
+          embeds: [errorEmbed],
+          components: [backButton]
+        });
+      } else if (!interaction.replied && !interaction.deferred) {
+        await interaction.update({
+          embeds: [errorEmbed],
+          components: [backButton]
+        });
+      }
+    } catch (replyError) {
+      console.error('Failed to send showPartnerList error message:', replyError);
+    }
   }
 }
 
