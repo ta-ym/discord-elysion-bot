@@ -124,7 +124,7 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
   try {
     // 即座にdeferして3秒タイムアウトを回避
     console.log(`[DEBUG] About to defer interaction immediately...`);
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply(); // ephemeralを削除して通常のメッセージとして送信
     console.log(`[DEBUG] Interaction deferred successfully`);
     
     console.log(`[DEBUG] Checking user balance for ${interaction.user.id}`);
@@ -224,6 +224,9 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
  */
 export async function handleDurationSelection(interaction: MessageComponentInteraction): Promise<void> {
   console.log(`[DEBUG] handleDurationSelection called by ${interaction.user.tag}`);
+  console.log(`[DEBUG] Interaction type: ${interaction.type}, customId: ${interaction.customId}`);
+  console.log(`[DEBUG] Is StringSelectMenu: ${interaction.isStringSelectMenu()}`);
+  
   if (!interaction.isStringSelectMenu()) {
     console.log(`[DEBUG] Not a string select menu interaction`);
     return;
@@ -231,6 +234,7 @@ export async function handleDurationSelection(interaction: MessageComponentInter
   
   const duration = parseInt(interaction.values[0]);
   console.log(`[DEBUG] Selected duration: ${duration} hours`);
+  console.log(`[DEBUG] Raw values: ${JSON.stringify(interaction.values)}`);
   
   try {
     // 最初に即座に応答する

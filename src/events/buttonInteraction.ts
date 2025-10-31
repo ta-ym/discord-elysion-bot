@@ -65,19 +65,25 @@ const buttonInteractionEvent: Event = {
 
       // パートナー選択ボタン
       if (interaction.customId.startsWith('vc_partner_list_')) {
+        console.log(`[DEBUG] vc_partner_list button clicked by ${interaction.user.tag}`);
         const duration = parseInt(interaction.customId.split('_')[3]);
+        console.log(`[DEBUG] Duration extracted: ${duration}`);
         await showPartnerList(interaction, duration);
         return;
       }
 
       if (interaction.customId.startsWith('vc_partner_search_')) {
+        console.log(`[DEBUG] vc_partner_search button clicked by ${interaction.user.tag}`);
         const duration = parseInt(interaction.customId.split('_')[3]);
+        console.log(`[DEBUG] Duration extracted: ${duration}`);
         await showPartnerSearchModal(interaction, duration);
         return;
       }
 
       if (interaction.customId.startsWith('vc_no_partner_')) {
+        console.log(`[DEBUG] vc_no_partner button clicked by ${interaction.user.tag}`);
         const duration = parseInt(interaction.customId.split('_')[3]);
+        console.log(`[DEBUG] Duration extracted: ${duration}`);
         await createSecretVC(interaction, duration);
         return;
       }
