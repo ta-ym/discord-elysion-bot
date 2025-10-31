@@ -909,22 +909,38 @@ export async function showPartnerList(interaction: ButtonInteraction, duration: 
  * ユーザー検索モーダルを表示
  */
 export async function showPartnerSearchModal(interaction: ButtonInteraction, duration: number): Promise<void> {
-  const modal = new ModalBuilder()
-    .setCustomId(`vc_partner_modal_${duration}`)
-    .setTitle('👥 パートナー検索');
+  console.log(`[DEBUG] showPartnerSearchModal called by ${interaction.user.tag} for duration: ${duration}`);
+  console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+  
+  try {
+    const modal = new ModalBuilder()
+      .setCustomId(`vc_partner_modal_${duration}`)
+      .setTitle('👥 パートナー検索');
 
-  const userInput = new TextInputBuilder()
-    .setCustomId('partner_input')
-    .setLabel('ユーザー名またはユーザーID')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('例: username または 123456789012345678')
-    .setRequired(true)
-    .setMaxLength(100);
+    const userInput = new TextInputBuilder()
+      .setCustomId('partner_input')
+      .setLabel('ユーザー名またはユーザーID')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('例: username または 123456789012345678')
+      .setRequired(true)
+      .setMaxLength(100);
 
-  const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
-  modal.addComponents(actionRow);
+    const actionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+    modal.addComponents(actionRow);
 
-  await interaction.showModal(modal);
+    console.log(`[DEBUG] Showing modal for partner search...`);
+    await interaction.showModal(modal);
+    console.log(`[DEBUG] Modal shown successfully`);
+  } catch (error) {
+    console.error('Error in showPartnerSearchModal:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+      userId: interaction.user.id,
+      duration: duration
+    });
+  }
 }
 
 /**

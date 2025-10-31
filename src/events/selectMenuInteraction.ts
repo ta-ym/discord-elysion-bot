@@ -1,4 +1,4 @@
-import { Events } from 'discord.js';
+import { Events, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Event } from '../types';
 import { 
   createSecretVC
@@ -66,39 +66,97 @@ const selectMenuInteractionEvent: Event = {
 
       // パートナー検索モーダル
       if (interaction.isModalSubmit() && interaction.customId.startsWith('vc_partner_modal_')) {
-        const duration = parseInt(interaction.customId.split('_')[3]);
-        const partnerInput = interaction.fields.getTextInputValue('partner_input');
-
-        // ユーザーIDまたは名前で検索
-        let partnerId: string | undefined;
+        console.log(`[DEBUG] vc_partner_modal triggered by ${interaction.user.tag}`);
+        console.log(`[DEBUG] Modal customId: ${interaction.customId}`);
+        console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
         
-        if (/^\d{17,19}$/.test(partnerInput)) {
-          // ユーザーIDの場合
-          partnerId = partnerInput;
-        } else {
-          // ユーザー名の場合、ギルドメンバーから検索
-          const guild = interaction.guild;
-          if (guild) {
-            const members = await guild.members.fetch();
-            const foundMember = members.find((member: any) => 
-              member.user.username.toLowerCase().includes(partnerInput.toLowerCase()) ||
-              member.displayName.toLowerCase().includes(partnerInput.toLowerCase())
-            );
-            if (foundMember) {
-              partnerId = foundMember.id;
+        try {
+          const duration = parseInt(interaction.customId.split('_')[3]);
+          const partnerInput = interaction.fields.getTextInputValue('partner_input');
+          console.log(`[DEBUG] Duration: ${duration}, Partner input: "${partnerInput}"`);
+
+          // ユーザーIDまたは名前で検索
+          let partnerId: string | undefined;
+          
+          if (/^\d{17,19}$/.test(partnerInput)) {
+            // ユーザーIDの場合
+            console.log(`[DEBUG] Input detected as user ID: ${partnerInput}`);
+            partnerId = partnerInput;
+            
+            // ユーザーIDが実際に存在するかDiscord APIで確認
+            try {
+              const guild = interaction.guild;
+              if (guild) {
+                console.log(`[DEBUG] Checking if user ID exists in guild...`);
+                const member = await guild.members.fetch(partnerId);
+                console.log(`[DEBUG] User found: ${member.user.username} (${member.displayName})`);
+              }
+            } catch (fetchError) {
+              console.log(`[DEBUG] User ID not found in guild: ${partnerId}`);
+              partnerId = undefined;
+            }
+          } else {
+            // ユーザー名の場合、ギルドメンバーから検索
+            console.log(`[DEBUG] Input detected as username: "${partnerInput}"`);
+            const guild = interaction.guild;
+            if (guild) {
+              console.log(`[DEBUG] Searching for username in guild members...`);
+              const members = await guild.members.fetch();
+              const foundMember = members.find((member: any) => 
+                member.user.username.toLowerCase().includes(partnerInput.toLowerCase()) ||
+                member.displayName.toLowerCase().includes(partnerInput.toLowerCase())
+              );
+              if (foundMember) {
+                partnerId = foundMember.id;
+                console.log(`[DEBUG] Username found: ${foundMember.user.username} (${foundMember.id})`);
+              } else {
+                console.log(`[DEBUG] Username not found: "${partnerInput}"`);
+              }
             }
           }
-        }
 
-        if (!partnerId) {
-          await interaction.reply({
-            content: '❌ 指定されたユーザーが見つかりませんでした。',
-            ephemeral: true
+          if (!partnerId) {
+            console.log(`[DEBUG] Partner not found, sending error message`);
+            
+            // defer して適切にエラーメッセージを送信
+            await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
+            
+            const errorEmbed = new EmbedBuilder()
+              .setColor('#ff0000')
+              .setTitle('❌ ユーザーが見つかりません')
+              .setDescription(`指定されたユーザーが見つかりませんでした。\n\n入力値: \`${partnerInput}\``)
+              .addFields(
+                { name: '確認事項', value: '• ユーザーIDが正しいか確認してください\n• ユーザー名のスペルが正しいか確認してください\n• そのユーザーがこのサーバーのメンバーか確認してください', inline: false }
+              );
+
+            const backButton = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`back_to_partner_selection_${duration}`)
+                  .setLabel('パートナー選択に戻る')
+                  .setStyle(ButtonStyle.Secondary)
+                  .setEmoji('🔙')
+              );
+
+            await interaction.editReply({
+              embeds: [errorEmbed],
+              components: [backButton]
+            });
+            return;
+          }
+
+          console.log(`[DEBUG] Partner found, proceeding to create VC with partner: ${partnerId}`);
+          await createSecretVC(interaction, duration, partnerId);
+          
+        } catch (error) {
+          console.error(`[DEBUG] Error in partner modal processing:`, error);
+          console.error(`[DEBUG] Error details:`, {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : 'No stack trace'
           });
-          return;
+          throw error; // Re-throw to be caught by outer try-catch
         }
-
-        await createSecretVC(interaction, duration, partnerId);
         return;
       }
 
