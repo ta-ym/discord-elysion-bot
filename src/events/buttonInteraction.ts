@@ -10,7 +10,8 @@ import {
   deleteSecretVC,
   handleDurationButtonSelection,
   createTestVC,
-  deleteTestVC
+  deleteTestVC,
+  showSimplePartnerModal
 } from '../utils/secretVCManager';
 import {
   showPublicVCCreationModal,
@@ -106,7 +107,16 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
-      // パートナー選択ボタン
+      // パートナーありでVC作成ボタン
+      if (interaction.customId.startsWith('vc_with_partner_')) {
+        console.log(`[DEBUG] vc_with_partner button clicked by ${interaction.user.tag}`);
+        const duration = parseInt(interaction.customId.split('_')[3]);
+        console.log(`[DEBUG] Duration extracted: ${duration}`);
+        await showSimplePartnerModal(interaction, duration);
+        return;
+      }
+
+      // パートナー選択ボタン（従来）
       if (interaction.customId.startsWith('vc_partner_list_')) {
         console.log(`[DEBUG] vc_partner_list button clicked by ${interaction.user.tag}`);
         const duration = parseInt(interaction.customId.split('_')[3]);

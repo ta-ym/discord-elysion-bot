@@ -64,7 +64,103 @@ const selectMenuInteractionEvent: Event = {
         return;
       }
 
-      // パートナー検索モーダル
+      // シンプルなパートナー検索モーダル（新方式）
+      if (interaction.isModalSubmit() && interaction.customId.startsWith('vc_simple_partner_modal_')) {
+        console.log(`[DEBUG] vc_simple_partner_modal triggered by ${interaction.user.tag}`);
+        console.log(`[DEBUG] Modal customId: ${interaction.customId}`);
+        console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+        
+        try {
+          const duration = parseInt(interaction.customId.split('_')[4]);
+          const partnerInput = interaction.fields.getTextInputValue('partner_input').trim();
+          console.log(`[DEBUG] Duration: ${duration}, Partner input: "${partnerInput}"`);
+
+          // ユーザーIDの形式チェック
+          if (!/^\d{17,19}$/.test(partnerInput)) {
+            console.log(`[DEBUG] Invalid user ID format: ${partnerInput}`);
+            
+            await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
+            
+            const errorEmbed = new EmbedBuilder()
+              .setColor('#ff9900')
+              .setTitle('⚠️ 無効なユーザーID')
+              .setDescription(`入力されたIDの形式が正しくありません。\n\n入力値: \`${partnerInput}\``)
+              .addFields(
+                { name: '正しいユーザーIDの形式', value: '• 17〜19桁の数字のみ\n• 例: 123456789012345678', inline: false },
+                { name: 'ユーザーIDの確認方法', value: '1. 対象ユーザーを右クリック\n2. "ユーザーIDをコピー"を選択\n3. 数字のIDを確認', inline: false }
+              );
+
+            const backButton = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`vc_with_partner_${duration}`)
+                  .setLabel('もう一度入力')
+                  .setStyle(ButtonStyle.Primary)
+                  .setEmoji('🔄')
+              );
+
+            await interaction.editReply({
+              embeds: [errorEmbed],
+              components: [backButton]
+            });
+            return;
+          }
+
+          // ユーザーIDが実際に存在するかDiscord APIで確認
+          let partnerId: string | undefined;
+          try {
+            const guild = interaction.guild;
+            if (guild) {
+              console.log(`[DEBUG] Checking if user ID exists in guild: ${partnerInput}`);
+              const member = await guild.members.fetch(partnerInput);
+              console.log(`[DEBUG] User found: ${member.user.username} (${member.displayName})`);
+              partnerId = partnerInput;
+            }
+          } catch (fetchError) {
+            console.log(`[DEBUG] User ID not found in guild: ${partnerInput}`);
+            
+            await interaction.deferReply({ flags: 64 }); // MessageFlags.Ephemeral
+            
+            const errorEmbed = new EmbedBuilder()
+              .setColor('#ff0000')
+              .setTitle('❌ ユーザーが見つかりません')
+              .setDescription(`指定されたユーザーIDのユーザーがこのサーバーに見つかりませんでした。\n\n入力されたID: \`${partnerInput}\``)
+              .addFields(
+                { name: '確認事項', value: '• ユーザーIDが正しいか確認してください\n• そのユーザーがこのサーバーのメンバーか確認してください\n• ボットユーザーは選択できません', inline: false }
+              );
+
+            const backButton = new ActionRowBuilder<ButtonBuilder>()
+              .addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`vc_with_partner_${duration}`)
+                  .setLabel('もう一度入力')
+                  .setStyle(ButtonStyle.Primary)
+                  .setEmoji('🔄')
+              );
+
+            await interaction.editReply({
+              embeds: [errorEmbed],
+              components: [backButton]
+            });
+            return;
+          }
+
+          console.log(`[DEBUG] Partner validation successful, proceeding to create VC with partner: ${partnerId}`);
+          await createSecretVC(interaction, duration, partnerId);
+          
+        } catch (error) {
+          console.error(`[DEBUG] Error in simple partner modal processing:`, error);
+          console.error(`[DEBUG] Error details:`, {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : 'No stack trace'
+          });
+          throw error; // Re-throw to be caught by outer try-catch
+        }
+        return;
+      }
+
+      // パートナー検索モーダル（従来方式）
       if (interaction.isModalSubmit() && interaction.customId.startsWith('vc_partner_modal_')) {
         console.log(`[DEBUG] vc_partner_modal triggered by ${interaction.user.tag}`);
         console.log(`[DEBUG] Modal customId: ${interaction.customId}`);

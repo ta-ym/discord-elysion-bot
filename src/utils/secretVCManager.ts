@@ -542,46 +542,53 @@ export async function handleDurationButtonSelection(interaction: ButtonInteracti
 }
 
 /**
- * パートナー選択処理（ボタン用）
+ * パートナー選択処理（ボタン用）- 新しいシンプルバージョン
  */
 async function processPartnerSelectionForButton(interaction: ButtonInteraction, duration: number): Promise<void> {
   console.log(`[DEBUG] processPartnerSelectionForButton started for duration: ${duration}`);
   
+  const cost = getCostByDuration(duration);
+  
   const partnerEmbed = new EmbedBuilder()
     .setColor('#3498db')
-    .setTitle('👥 パートナー選択')
-    .setDescription(`継続時間: **${duration}時間**\n\n一緒にVCを使う相手を選択してください。`)
+    .setTitle('👥 パートナー設定')
+    .setDescription(`継続時間: **${duration}時間** (${cost.toLocaleString()} Ru)\n\nシークレットVCのパートナー設定を選択してください。`)
     .addFields(
-      { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索\n• パートナーなしで作成', inline: false }
+      { name: '🔹 パートナーあり', value: 'もう一人のユーザーと共有するVCを作成', inline: true },
+      { name: '🔸 パートナーなし', value: 'あなた専用のVCを作成', inline: true }
     );
 
-  console.log(`[DEBUG] Partner embed created, creating buttons`);
+  console.log(`[DEBUG] Partner embed created, creating simple buttons`);
 
   const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
     .addComponents(
       new ButtonBuilder()
-        .setCustomId(`vc_partner_list_${duration}`)
-        .setLabel('メンバー一覧から選択')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📋'),
-      new ButtonBuilder()
-        .setCustomId(`vc_partner_search_${duration}`)
-        .setLabel('ユーザー名/IDで検索')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('🔍'),
+        .setCustomId(`vc_with_partner_${duration}`)
+        .setLabel('パートナーありで作成')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('�'),
       new ButtonBuilder()
         .setCustomId(`vc_no_partner_${duration}`)
         .setLabel('パートナーなしで作成')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('👤')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('�')
     );
 
-  console.log(`[DEBUG] Buttons created, updating interaction with partner selection`);
+  const backButton = new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('back_to_vc_creation')
+        .setLabel('時間選択に戻る')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('�')
+    );
+
+  console.log(`[DEBUG] Buttons created, updating interaction with simple partner selection`);
   await interaction.editReply({
     embeds: [partnerEmbed],
-    components: [partnerButtons]
+    components: [partnerButtons, backButton]
   });
-  console.log(`[DEBUG] Partner selection update successful`);
+  console.log(`[DEBUG] Simple partner selection update successful`);
 }
 
 /**
@@ -933,6 +940,53 @@ export async function showPartnerSearchModal(interaction: ButtonInteraction, dur
     console.log(`[DEBUG] Modal shown successfully`);
   } catch (error) {
     console.error('Error in showPartnerSearchModal:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+      userId: interaction.user.id,
+      duration: duration
+    });
+  }
+}
+
+/**
+ * シンプルなパートナーモーダルを表示
+ */
+export async function showSimplePartnerModal(interaction: ButtonInteraction, duration: number): Promise<void> {
+  console.log(`[DEBUG] showSimplePartnerModal called by ${interaction.user.tag} for duration: ${duration}`);
+  console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+  
+  try {
+    const modal = new ModalBuilder()
+      .setCustomId(`vc_simple_partner_modal_${duration}`)
+      .setTitle('👥 パートナー指定');
+
+    const userInput = new TextInputBuilder()
+      .setCustomId('partner_input')
+      .setLabel('パートナーのユーザーID')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('例: 123456789012345678')
+      .setRequired(true)
+      .setMinLength(17)
+      .setMaxLength(19);
+
+    const helpText = new TextInputBuilder()
+      .setCustomId('help_text')
+      .setLabel('ヒント: ユーザーIDの確認方法')
+      .setStyle(TextInputStyle.Paragraph)
+      .setValue('1. Discordで対象ユーザーを右クリック\n2. "ユーザーIDをコピー"を選択\n3. ここに貼り付け\n\n注意: ユーザー名ではなく数字のIDが必要です')
+      .setRequired(false);
+
+    const actionRow1 = new ActionRowBuilder<TextInputBuilder>().addComponents(userInput);
+    const actionRow2 = new ActionRowBuilder<TextInputBuilder>().addComponents(helpText);
+    modal.addComponents(actionRow1, actionRow2);
+
+    console.log(`[DEBUG] Showing simple partner modal...`);
+    await interaction.showModal(modal);
+    console.log(`[DEBUG] Simple partner modal shown successfully`);
+  } catch (error) {
+    console.error('Error in showSimplePartnerModal:', error);
     console.error('Error details:', {
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
