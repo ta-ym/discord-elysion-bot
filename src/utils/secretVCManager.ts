@@ -192,6 +192,10 @@ export async function handleDurationSelection(interaction: MessageComponentInter
   console.log(`[DEBUG] Selected duration: ${duration} hours`);
   
   try {
+    // 先に応答を返してタイムアウトを防ぐ
+    await interaction.deferUpdate();
+    console.log(`[DEBUG] Interaction deferred successfully`);
+    
     const partnerEmbed = new EmbedBuilder()
       .setColor('#3498db')
       .setTitle('👥 パートナー選択')
@@ -220,7 +224,7 @@ export async function handleDurationSelection(interaction: MessageComponentInter
       );
 
     console.log(`[DEBUG] Updating interaction with partner selection`);
-    await interaction.update({
+    await interaction.editReply({
       embeds: [partnerEmbed],
       components: [partnerButtons]
     });
@@ -230,11 +234,22 @@ export async function handleDurationSelection(interaction: MessageComponentInter
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
     
     try {
-      await interaction.update({
-        content: '❌ エラーが発生しました。',
-        embeds: [],
-        components: []
-      });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ エラーが発生しました')
+        .setDescription('処理中にエラーが発生しました。しばらく待ってから再度お試しください。');
+        
+      if (interaction.deferred) {
+        await interaction.editReply({
+          embeds: [errorEmbed],
+          components: []
+        });
+      } else {
+        await interaction.update({
+          embeds: [errorEmbed],
+          components: []
+        });
+      }
     } catch (updateError) {
       console.error('Error updating interaction:', updateError);
     }
