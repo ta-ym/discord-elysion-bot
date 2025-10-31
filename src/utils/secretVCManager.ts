@@ -192,121 +192,162 @@ export async function handleDurationSelection(interaction: MessageComponentInter
   console.log(`[DEBUG] Selected duration: ${duration} hours`);
   
   try {
-    // 先に応答を返してタイムアウトを防ぐ
+    // 最初に即座に応答する
     console.log(`[DEBUG] About to defer interaction...`);
+    console.log(`[DEBUG] Interaction state before defer - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+    
     await interaction.deferUpdate();
     console.log(`[DEBUG] Interaction deferred successfully`);
     
-    // 料金確認と残高チェック
-    console.log(`[DEBUG] Getting cost for duration: ${duration}`);
-    const cost = getCostByDuration(duration);
-    console.log(`[DEBUG] Cost calculated: ${cost}`);
-    
-    console.log(`[DEBUG] Creating database instance...`);
-    const database = new Database();
-    console.log(`[DEBUG] Database instance created`);
-    
-    console.log(`[DEBUG] Checking user balance for cost: ${cost}`);
-    let user = await database.getUser(interaction.user.id);
-    if (!user) {
-      console.log(`[DEBUG] User not found, creating new user`);
-      user = await database.createUser(interaction.user.id);
-    }
-    
-    console.log(`[DEBUG] User balance: ${user.balance}, Required: ${cost}`);
-    
-    // 残高不足の場合
-    if (user.balance < cost) {
-      console.log(`[DEBUG] Insufficient balance`);
-      const insufficientEmbed = new EmbedBuilder()
-        .setColor('#ff0000')
-        .setTitle('❌ 残高不足')
-        .setDescription(`選択した時間制限（${duration}時間）に必要な残高が不足しています。`)
-        .addFields(
-          { name: '必要額', value: `${cost.toLocaleString()} Ru`, inline: true },
-          { name: '現在の残高', value: `${user.balance.toLocaleString()} Ru`, inline: true },
-          { name: '不足額', value: `${(cost - user.balance).toLocaleString()} Ru`, inline: true }
-        );
-
-      console.log(`[DEBUG] Sending insufficient balance message`);
-      await interaction.editReply({
-        embeds: [insufficientEmbed],
-        components: []
-      });
-      return;
-    }
-    
-    console.log(`[DEBUG] Balance sufficient, creating partner selection embed`);
-    
-    const partnerEmbed = new EmbedBuilder()
-      .setColor('#3498db')
-      .setTitle('👥 パートナー選択')
-      .setDescription(`継続時間: **${duration}時間** (${cost.toLocaleString()} Ru)\n\n一緒にVCを使う相手を選択してください。`)
-      .addFields(
-        { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索\n• パートナーなしで作成', inline: false }
-      );
-
-    console.log(`[DEBUG] Partner embed created, creating buttons`);
-
-    const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`vc_partner_list_${duration}`)
-          .setLabel('メンバー一覧から選択')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('📋'),
-        new ButtonBuilder()
-          .setCustomId(`vc_partner_search_${duration}`)
-          .setLabel('ユーザー名/IDで検索')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('🔍'),
-        new ButtonBuilder()
-          .setCustomId(`vc_no_partner_${duration}`)
-          .setLabel('パートナーなしで作成')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('👤')
-      );
-
-    console.log(`[DEBUG] Buttons created, updating interaction with partner selection`);
-    await interaction.editReply({
-      embeds: [partnerEmbed],
-      components: [partnerButtons]
+    // 非同期で残りの処理を実行
+    setImmediate(async () => {
+      try {
+        await processPartnerSelection(interaction, duration);
+      } catch (error) {
+        console.error('Error in processPartnerSelection:', error);
+        await handlePartnerSelectionError(interaction, error, duration);
+      }
     });
-    console.log(`[DEBUG] Partner selection update successful`);
+    
   } catch (error) {
-    console.error('Error in handleDurationSelection:', error);
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    console.error('Error in handleDurationSelection - immediate section:', error);
     console.error('Error details:', {
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
       userId: interaction.user.id,
-      duration: duration
+      duration: duration,
+      deferred: interaction.deferred,
+      replied: interaction.replied
     });
     
+    // deferに失敗した場合の緊急処理
     try {
-      const errorEmbed = new EmbedBuilder()
-        .setColor('#ff0000')
-        .setTitle('❌ エラーが発生しました')
-        .setDescription(`処理中にエラーが発生しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`);
-        
-      console.log(`[DEBUG] Attempting to send error message, deferred: ${interaction.deferred}`);
-      
-      if (interaction.deferred) {
-        await interaction.editReply({
-          embeds: [errorEmbed],
-          components: []
-        });
-      } else {
+      if (!interaction.replied && !interaction.deferred) {
         await interaction.update({
-          embeds: [errorEmbed],
+          content: '❌ エラーが発生しました。再度お試しください。',
+          embeds: [],
           components: []
         });
       }
-      console.log(`[DEBUG] Error message sent successfully`);
     } catch (updateError) {
-      console.error('Error updating interaction after error:', updateError);
-      console.error('Update error stack:', updateError instanceof Error ? updateError.stack : 'No stack available');
+      console.error('Failed to send emergency error message:', updateError);
     }
+  }
+}
+
+/**
+ * パートナー選択処理（非同期）
+ */
+async function processPartnerSelection(interaction: MessageComponentInteraction, duration: number): Promise<void> {
+  console.log(`[DEBUG] processPartnerSelection started for duration: ${duration}`);
+  
+  // 料金確認と残高チェック
+  console.log(`[DEBUG] Getting cost for duration: ${duration}`);
+  const cost = getCostByDuration(duration);
+  console.log(`[DEBUG] Cost calculated: ${cost}`);
+  
+  console.log(`[DEBUG] Creating database instance...`);
+  const database = new Database();
+  console.log(`[DEBUG] Database instance created`);
+  
+  console.log(`[DEBUG] Checking user balance for cost: ${cost}`);
+  let user = await database.getUser(interaction.user.id);
+  if (!user) {
+    console.log(`[DEBUG] User not found, creating new user`);
+    user = await database.createUser(interaction.user.id);
+  }
+  
+  console.log(`[DEBUG] User balance: ${user.balance}, Required: ${cost}`);
+  
+  // 残高不足の場合
+  if (user.balance < cost) {
+    console.log(`[DEBUG] Insufficient balance`);
+    const insufficientEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ 残高不足')
+      .setDescription(`選択した時間制限（${duration}時間）に必要な残高が不足しています。`)
+      .addFields(
+        { name: '必要額', value: `${cost.toLocaleString()} Ru`, inline: true },
+        { name: '現在の残高', value: `${user.balance.toLocaleString()} Ru`, inline: true },
+        { name: '不足額', value: `${(cost - user.balance).toLocaleString()} Ru`, inline: true }
+      );
+
+    console.log(`[DEBUG] Sending insufficient balance message`);
+    await interaction.editReply({
+      embeds: [insufficientEmbed],
+      components: []
+    });
+    return;
+  }
+  
+  console.log(`[DEBUG] Balance sufficient, creating partner selection embed`);
+  
+  const partnerEmbed = new EmbedBuilder()
+    .setColor('#3498db')
+    .setTitle('👥 パートナー選択')
+    .setDescription(`継続時間: **${duration}時間** (${cost.toLocaleString()} Ru)\n\n一緒にVCを使う相手を選択してください。`)
+    .addFields(
+      { name: '選択方法', value: '• メンバー一覧から選択\n• ユーザー名/IDで検索\n• パートナーなしで作成', inline: false }
+    );
+
+  console.log(`[DEBUG] Partner embed created, creating buttons`);
+
+  const partnerButtons = new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`vc_partner_list_${duration}`)
+        .setLabel('メンバー一覧から選択')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📋'),
+      new ButtonBuilder()
+        .setCustomId(`vc_partner_search_${duration}`)
+        .setLabel('ユーザー名/IDで検索')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('🔍'),
+      new ButtonBuilder()
+        .setCustomId(`vc_no_partner_${duration}`)
+        .setLabel('パートナーなしで作成')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('👤')
+    );
+
+  console.log(`[DEBUG] Buttons created, updating interaction with partner selection`);
+  await interaction.editReply({
+    embeds: [partnerEmbed],
+    components: [partnerButtons]
+  });
+  console.log(`[DEBUG] Partner selection update successful`);
+}
+
+/**
+ * パートナー選択処理のエラーハンドリング
+ */
+async function handlePartnerSelectionError(interaction: MessageComponentInteraction, error: unknown, duration: number): Promise<void> {
+  console.error('Error in partner selection process:', error);
+  console.error('Error details:', {
+    name: error instanceof Error ? error.name : 'Unknown',
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : 'No stack',
+    userId: interaction.user.id,
+    duration: duration
+  });
+  
+  try {
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ エラーが発生しました')
+      .setDescription(`処理中にエラーが発生しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`);
+      
+    console.log(`[DEBUG] Attempting to send error message, deferred: ${interaction.deferred}`);
+    
+    await interaction.editReply({
+      embeds: [errorEmbed],
+      components: []
+    });
+    console.log(`[DEBUG] Error message sent successfully`);
+  } catch (replyError) {
+    console.error('Failed to send error message:', replyError);
   }
 }
 
