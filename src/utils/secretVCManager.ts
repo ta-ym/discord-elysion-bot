@@ -20,6 +20,9 @@ import { Database } from '../database';
 import { SALARY_AUTHORIZED_ROLES } from '../utils/permissions';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 
+// 処理中ユーザーのトラッキング
+const processingUsers = new Map<string, number>();
+
 // シークレットVC作成用のカテゴリID
 const SECRET_VC_CATEGORY_ID = '1425044725865648148';
 
@@ -89,10 +92,41 @@ export async function sendVCCreationPanel(interaction: ChatInputCommandInteracti
  * VC作成プロセスを開始
  */
 export async function startVCCreation(interaction: ButtonInteraction): Promise<void> {
+  const userId = interaction.user.id;
+  const currentTime = Date.now();
+  
   console.log(`[DEBUG] startVCCreation called by ${interaction.user.tag}`);
+  console.log(`[DEBUG] Interaction state - deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+  
+  // 重複処理の防止
+  const lastProcessTime = processingUsers.get(userId);
+  if (lastProcessTime && (currentTime - lastProcessTime) < 5000) {
+    console.log(`[DEBUG] Duplicate request detected for user ${userId}, ignoring`);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ 
+        content: '⏳ 処理中です。少しお待ちください。', 
+        flags: 64 // MessageFlags.Ephemeral
+      });
+    }
+    return;
+  }
+  
+  // 処理開始をマーク
+  processingUsers.set(userId, currentTime);
+  
+  // 5秒後に自動的にフラグを削除
+  setTimeout(() => {
+    processingUsers.delete(userId);
+  }, 5000);
+  
   const database = new Database();
   
   try {
+    // 即座にdeferして3秒タイムアウトを回避
+    console.log(`[DEBUG] About to defer interaction immediately...`);
+    await interaction.deferReply({ ephemeral: true });
+    console.log(`[DEBUG] Interaction deferred successfully`);
+    
     console.log(`[DEBUG] Checking user balance for ${interaction.user.id}`);
     // ユーザーの残高確認
     let user = await database.getUser(interaction.user.id);
@@ -104,9 +138,8 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
     console.log(`[DEBUG] User balance: ${user.balance}`);
     if (user.balance < 5000) {
       console.log(`[DEBUG] Insufficient balance: ${user.balance} < 5000`);
-      await interaction.reply({ 
-        content: `❌ 残高が不足しています。\n最低必要額: 5,000 Ru\n現在の残高: ${user.balance.toLocaleString()} Ru`, 
-        ephemeral: true 
+      await interaction.editReply({ 
+        content: `❌ 残高が不足しています。\n最低必要額: 5,000 Ru\n現在の残高: ${user.balance.toLocaleString()} Ru`
       });
       return;
     }
@@ -149,31 +182,39 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
       );
 
     console.log(`[DEBUG] Sending reply with time selection`);
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [timeEmbed],
-      components: [timeSelect],
-      flags: 64 // MessageFlags.Ephemeral
+      components: [timeSelect]
     });
     console.log(`[DEBUG] Reply sent successfully`);
 
   } catch (error) {
     console.error('VC作成開始エラー:', error);
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack available');
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      userId: interaction.user.id,
+      deferred: interaction.deferred,
+      replied: interaction.replied
+    });
     
     try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ 
-          content: '❌ エラーが発生しました。', 
-          ephemeral: true 
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({ 
+          content: '❌ エラーが発生しました。再度お試しください。'
         });
-      } else {
-        await interaction.followUp({ 
-          content: '❌ エラーが発生しました。', 
-          ephemeral: true 
+      } else if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ 
+          content: '❌ エラーが発生しました。再度お試しください。', 
+          flags: 64 // MessageFlags.Ephemeral
         });
       }
     } catch (replyError) {
       console.error('Error sending error reply:', replyError);
+    } finally {
+      // エラー時もフラグを削除
+      processingUsers.delete(userId);
     }
   }
 }
