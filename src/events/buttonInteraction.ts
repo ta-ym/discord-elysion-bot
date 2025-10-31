@@ -7,7 +7,10 @@ import {
   showPartnerList, 
   showPartnerSearchModal,
   createSecretVC,
-  deleteSecretVC
+  deleteSecretVC,
+  handleDurationButtonSelection,
+  createTestVC,
+  deleteTestVC
 } from '../utils/secretVCManager';
 import {
   showPublicVCCreationModal,
@@ -27,6 +30,37 @@ const buttonInteractionEvent: Event = {
       // 新しいシークレットVC作成フロー
       if (interaction.customId === 'create_secret_vc') {
         console.log(`[DEBUG] create_secret_vc button clicked by ${interaction.user.tag}`);
+        await startVCCreation(interaction);
+        return;
+      }
+
+      // 時間選択ボタン（6/12/24時間）
+      if (interaction.customId.startsWith('vc_duration_')) {
+        console.log(`[DEBUG] vc_duration button clicked by ${interaction.user.tag}`);
+        const duration = parseInt(interaction.customId.split('_')[2]);
+        console.log(`[DEBUG] Duration selected: ${duration} hours`);
+        await handleDurationButtonSelection(interaction, duration);
+        return;
+      }
+
+      // テストVC作成ボタン
+      if (interaction.customId === 'vc_test_create') {
+        console.log(`[DEBUG] vc_test_create button clicked by ${interaction.user.tag}`);
+        await createTestVC(interaction);
+        return;
+      }
+
+      // テストVC削除ボタン
+      if (interaction.customId.startsWith('delete_test_vc_')) {
+        console.log(`[DEBUG] delete_test_vc button clicked by ${interaction.user.tag}`);
+        const channelId = interaction.customId.split('_')[3];
+        await deleteTestVC(interaction, channelId);
+        return;
+      }
+
+      // VC作成に戻るボタン
+      if (interaction.customId === 'back_to_vc_creation') {
+        console.log(`[DEBUG] back_to_vc_creation button clicked by ${interaction.user.tag}`);
         await startVCCreation(interaction);
         return;
       }

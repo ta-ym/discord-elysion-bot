@@ -145,46 +145,50 @@ export async function startVCCreation(interaction: ButtonInteraction): Promise<v
     }
 
     console.log(`[DEBUG] Creating time selection embed`);
-    // 時間制限選択画面
+    // 時間制限選択画面（ボタン方式）
     const timeEmbed = new EmbedBuilder()
       .setColor('#e74c3c')
       .setTitle('⏰ VC継続時間を選択')
-      .setDescription('シークレットVCの継続時間を選択してください。\n指定時間経過後、自動的に削除されます。')
+      .setDescription('シークレットVCの継続時間を選択してください。\n指定時間経過後、自動的に削除されます。\n\n⚠️ まず「テストVC作成」でカテゴリ権限の確認をお試しください。')
       .addFields(
         { name: '6時間', value: '5,000 Ru', inline: true },
         { name: '12時間', value: '10,000 Ru', inline: true },
         { name: '24時間', value: '30,000 Ru', inline: true }
       );
 
-    console.log(`[DEBUG] Creating time selection menu`);
-    const timeSelect = new ActionRowBuilder<StringSelectMenuBuilder>()
+    console.log(`[DEBUG] Creating time selection buttons`);
+    const timeButtons1 = new ActionRowBuilder<ButtonBuilder>()
       .addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('vc_duration_select')
-          .setPlaceholder('継続時間を選択してください')
-          .addOptions(
-            new StringSelectMenuOptionBuilder()
-              .setLabel('6時間')
-              .setDescription('6時間後に自動削除')
-              .setValue('6')
-              .setEmoji('⏰'),
-            new StringSelectMenuOptionBuilder()
-              .setLabel('12時間')
-              .setDescription('12時間後に自動削除')
-              .setValue('12')
-              .setEmoji('🕐'),
-            new StringSelectMenuOptionBuilder()
-              .setLabel('24時間')
-              .setDescription('24時間後に自動削除')
-              .setValue('24')
-              .setEmoji('📅')
-          )
+        new ButtonBuilder()
+          .setCustomId('vc_test_create')
+          .setLabel('テストVC作成')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🧪'),
+        new ButtonBuilder()
+          .setCustomId('vc_duration_6')
+          .setLabel('6時間 (5,000 Ru)')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('⏰')
       );
 
-    console.log(`[DEBUG] Sending reply with time selection`);
+    const timeButtons2 = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('vc_duration_12')
+          .setLabel('12時間 (10,000 Ru)')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🕐'),
+        new ButtonBuilder()
+          .setCustomId('vc_duration_24')
+          .setLabel('24時間 (30,000 Ru)')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('📅')
+      );
+
+    console.log(`[DEBUG] Sending reply with time selection buttons`);
     await interaction.editReply({
       embeds: [timeEmbed],
-      components: [timeSelect]
+      components: [timeButtons1, timeButtons2]
     });
     console.log(`[DEBUG] Reply sent successfully`);
 
@@ -393,6 +397,240 @@ async function handlePartnerSelectionError(interaction: MessageComponentInteract
     console.log(`[DEBUG] Error message sent successfully`);
   } catch (replyError) {
     console.error('Failed to send error message:', replyError);
+  }
+}
+
+/**
+ * 時間選択ボタン押下後のパートナー選択画面（ボタン方式）
+ */
+export async function handleDurationButtonSelection(interaction: ButtonInteraction, duration: number): Promise<void> {
+  console.log(`[DEBUG] handleDurationButtonSelection called by ${interaction.user.tag} for ${duration} hours`);
+  
+  const userId = interaction.user.id;
+  const currentTime = Date.now();
+  
+  // 重複処理の防止
+  const lastProcessTime = processingUsers.get(userId);
+  if (lastProcessTime && (currentTime - lastProcessTime) < 3000) {
+    console.log(`[DEBUG] Duplicate duration selection detected for user ${userId}, ignoring`);
+    return;
+  }
+  
+  // 処理開始をマーク
+  processingUsers.set(userId, currentTime);
+  
+  // 3秒後に自動的にフラグを削除
+  setTimeout(() => {
+    processingUsers.delete(userId);
+  }, 3000);
+  
+  try {
+    // 即座にdeferして3秒タイムアウトを回避
+    console.log(`[DEBUG] About to defer button interaction...`);
+    await interaction.deferUpdate();
+    console.log(`[DEBUG] Button interaction deferred successfully`);
+    
+    // 非同期で処理を実行
+    setImmediate(async () => {
+      try {
+        await processPartnerSelection(interaction, duration);
+      } catch (error) {
+        console.error('Error in processPartnerSelection (button):', error);
+        await handlePartnerSelectionError(interaction, error, duration);
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error in handleDurationButtonSelection:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+      userId: interaction.user.id,
+      duration: duration,
+      deferred: interaction.deferred,
+      replied: interaction.replied
+    });
+    
+    // エラー時の緊急処理
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.update({
+          content: '❌ エラーが発生しました。再度お試しください。',
+          embeds: [],
+          components: []
+        });
+      }
+    } catch (updateError) {
+      console.error('Failed to send emergency error message (button):', updateError);
+    } finally {
+      // エラー時もフラグを削除
+      processingUsers.delete(userId);
+    }
+  }
+}
+
+/**
+ * テストVC作成（カテゴリ権限と同期）
+ */
+export async function createTestVC(interaction: ButtonInteraction): Promise<void> {
+  console.log(`[DEBUG] createTestVC called by ${interaction.user.tag}`);
+  
+  try {
+    // 即座にdeferして3秒タイムアウトを回避
+    console.log(`[DEBUG] About to defer test VC creation...`);
+    await interaction.deferUpdate();
+    console.log(`[DEBUG] Test VC creation deferred successfully`);
+    
+    const guild = interaction.guild;
+    if (!guild) {
+      throw new Error('Guild not found');
+    }
+
+    console.log(`[DEBUG] Creating test VC with category sync...`);
+    
+    // カテゴリと同期した権限でVC作成
+    const channel = await guild.channels.create({
+      name: `🧪test-${interaction.user.username}`,
+      type: ChannelType.GuildVoice,
+      parent: SECRET_VC_CATEGORY_ID, // シークレットVCと同じカテゴリを使用
+      // permissionOverwritesを指定しない = カテゴリと同期
+    });
+
+    console.log(`[DEBUG] Test VC created successfully: ${channel.id}`);
+
+    const successEmbed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('✅ テストVC作成成功')
+      .setDescription(`テストVCが正常に作成されました！\nカテゴリと同期した権限でVC作成が可能です。`)
+      .addFields(
+        { name: 'VC名', value: channel.name, inline: true },
+        { name: 'VC ID', value: channel.id, inline: true },
+        { name: 'カテゴリ', value: channel.parent?.name || 'なし', inline: true }
+      );
+
+    const deleteButton = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`delete_test_vc_${channel.id}`)
+          .setLabel('テストVCを削除')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🗑️'),
+        new ButtonBuilder()
+          .setCustomId('back_to_vc_creation')
+          .setLabel('VC作成に戻る')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔙')
+      );
+
+    await interaction.editReply({
+      embeds: [successEmbed],
+      components: [deleteButton]
+    });
+
+  } catch (error) {
+    console.error('Error in createTestVC:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : 'No stack',
+      userId: interaction.user.id
+    });
+    
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ テストVC作成失敗')
+      .setDescription(`テストVCの作成に失敗しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`)
+      .addFields(
+        { name: '対処法', value: '• ボットに適切な権限があるか確認してください\n• カテゴリが存在するか確認してください\n• しばらく時間をおいて再試行してください', inline: false }
+      );
+
+    const backButton = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('back_to_vc_creation')
+          .setLabel('VC作成に戻る')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔙')
+      );
+
+    try {
+      await interaction.editReply({
+        embeds: [errorEmbed],
+        components: [backButton]
+      });
+    } catch (replyError) {
+      console.error('Failed to send test VC error message:', replyError);
+    }
+  }
+}
+
+/**
+ * テストVC削除
+ */
+export async function deleteTestVC(interaction: ButtonInteraction, channelId: string): Promise<void> {
+  console.log(`[DEBUG] deleteTestVC called by ${interaction.user.tag} for channel ${channelId}`);
+  
+  try {
+    await interaction.deferUpdate();
+    
+    const guild = interaction.guild;
+    if (!guild) {
+      throw new Error('Guild not found');
+    }
+
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel) {
+      throw new Error('Channel not found');
+    }
+
+    console.log(`[DEBUG] Deleting test VC: ${channel.name}`);
+    await channel.delete('テストVC削除');
+
+    const successEmbed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('✅ テストVC削除完了')
+      .setDescription('テストVCが正常に削除されました。');
+
+    const backButton = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('back_to_vc_creation')
+          .setLabel('VC作成に戻る')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔙')
+      );
+
+    await interaction.editReply({
+      embeds: [successEmbed],
+      components: [backButton]
+    });
+
+  } catch (error) {
+    console.error('Error in deleteTestVC:', error);
+    
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ テストVC削除失敗')
+      .setDescription(`テストVCの削除に失敗しました。\n\nエラー: ${error instanceof Error ? error.message : String(error)}`);
+
+    const backButton = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('back_to_vc_creation')
+          .setLabel('VC作成に戻る')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🔙')
+      );
+
+    try {
+      await interaction.editReply({
+        embeds: [errorEmbed],
+        components: [backButton]
+      });
+    } catch (replyError) {
+      console.error('Failed to send delete test VC error message:', replyError);
+    }
   }
 }
 

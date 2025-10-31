@@ -1,7 +1,6 @@
 import { Events } from 'discord.js';
 import { Event } from '../types';
 import { 
-  handleDurationSelection,
   createSecretVC
 } from '../utils/secretVCManager';
 import { 
@@ -15,7 +14,8 @@ const selectMenuInteractionEvent: Event = {
     if (!interaction.isStringSelectMenu() && !interaction.isModalSubmit()) return;
 
     try {
-      // 時間選択メニュー
+      // 時間選択メニュー（廃止予定 - ボタン方式に変更）
+      /*
       if (interaction.isStringSelectMenu() && interaction.customId === 'vc_duration_select') {
         console.log(`[DEBUG] vc_duration_select triggered by ${interaction.user.tag}, values: ${interaction.values}`);
         console.log(`[DEBUG] User ID: ${interaction.user.id}, Guild ID: ${interaction.guild?.id}`);
@@ -36,6 +36,7 @@ const selectMenuInteractionEvent: Event = {
         }
         return;
       }
+      */
 
       // メンバー選択メニュー
       if (interaction.isStringSelectMenu() && interaction.customId.startsWith('vc_member_select_')) {
