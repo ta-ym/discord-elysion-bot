@@ -13,7 +13,8 @@ import {
   MessageComponentInteraction,
   ChannelType,
   PermissionFlagsBits,
-  GuildMember
+  GuildMember,
+  Guild
 } from 'discord.js';
 import { Database } from '../database';
 import { SALARY_AUTHORIZED_ROLES } from '../utils/permissions';
@@ -37,6 +38,41 @@ function getCostByDuration(duration: number): number {
       return 30000;
     default:
       return 5000;
+  }
+}
+
+/**
+ * 次のシークレットVC名を生成
+ */
+async function generateSecretVCName(guild: Guild): Promise<string> {
+  try {
+    // カテゴリ内の既存チャンネルを取得
+    const category = await guild.channels.fetch(SECRET_VC_CATEGORY_ID);
+    if (!category || category.type !== ChannelType.GuildCategory) {
+      return 'シークレットA';
+    }
+
+    const channels = category.children.cache.filter((ch: any) => 
+      ch.type === ChannelType.GuildVoice && ch.name.startsWith('シークレット')
+    );
+
+    // A, B, C, ... の順で使用可能な文字を見つける
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (let i = 0; i < alphabet.length; i++) {
+      const letter = alphabet[i];
+      const testName = `シークレット${letter}`;
+      
+      const exists = channels.some((ch: any) => ch.name === testName);
+      if (!exists) {
+        return testName;
+      }
+    }
+
+    // すべて使用済みの場合は番号を使用
+    return `シークレット${channels.size + 1}`;
+  } catch (error) {
+    console.error('Error generating secret VC name:', error);
+    return 'シークレットA';
   }
 }
 
@@ -331,9 +367,7 @@ export async function createSecretVC(
     }
 
     // チャンネル名生成
-    const channelName = partner 
-      ? `${interaction.user.username}＆${partner.displayName}のVC`
-      : `${interaction.user.username}のVC`;
+    const channelName = await generateSecretVCName(guild);
 
     // VCを作成
     const channel = await guild.channels.create({
