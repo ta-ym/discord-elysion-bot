@@ -149,26 +149,60 @@ process.on('SIGTERM', () => {
 
 // インタラクション処理
 bot.client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = bot.commands.get(interaction.commandName);
-
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
+  console.log(`[MAIN] Interaction received: ${interaction.type} from ${interaction.user.tag}`);
+  
+  if (interaction.isButton()) {
+    console.log(`[MAIN] Button interaction: ${interaction.customId}`);
+    
+    // ボタンインタラクション処理
+    try {
+      const buttonInteractionHandler = await import('./events/buttonInteraction');
+      if (buttonInteractionHandler.default) {
+        await buttonInteractionHandler.default.execute(interaction);
+      }
+    } catch (error) {
+      console.error('[MAIN] Error handling button interaction:', error);
+    }
     return;
-  }
+  } 
+  
+  if (interaction.isModalSubmit()) {
+    console.log(`[MAIN] Modal interaction: ${interaction.customId}`);
+    
+    // モーダルインタラクション処理
+    try {
+      const modalInteractionHandler = await import('./events/modalInteraction');
+      if (modalInteractionHandler.default) {
+        await modalInteractionHandler.default.execute(interaction);
+      }
+    } catch (error) {
+      console.error('[MAIN] Error handling modal interaction:', error);
+    }
+    return;
+  } 
+  
+  if (interaction.isChatInputCommand()) {
+    console.log(`[MAIN] Command interaction: ${interaction.commandName}`);
+    
+    const command = bot.commands.get(interaction.commandName);
 
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error('Error executing command:', error);
-    
-    const errorMessage = { content: 'There was an error while executing this command!', ephemeral: true };
-    
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp(errorMessage);
-    } else {
-      await interaction.reply(errorMessage);
+    if (!command) {
+      console.error(`No command matching ${interaction.commandName} was found.`);
+      return;
+    }
+
+    try {
+      await command.execute(interaction);
+    } catch (error) {
+      console.error('Error executing command:', error);
+      
+      const errorMessage = { content: 'There was an error while executing this command!', ephemeral: true };
+      
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp(errorMessage);
+      } else {
+        await interaction.reply(errorMessage);
+      }
     }
   }
 });

@@ -213,6 +213,7 @@ export function createTempVCPanel() {
         .setEmoji('⏰')
     );
 
+  console.log('[TEMP VC PANEL] Panel created with button customId: create_temp_vc');
   return { embeds: [panelEmbed], components: [panelButton] };
 }
 
