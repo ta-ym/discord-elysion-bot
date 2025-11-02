@@ -88,17 +88,6 @@ export class CurrencyLogger {
           );
         break;
 
-      case 'vc_purchase':
-        embed
-          .setColor('#9b59b6')
-          .setTitle('🎪 シークレットVC作成')
-          .addFields(
-            { name: '作成者', value: `<@${toUserId}>`, inline: true },
-            { name: '費用', value: `-${amount.toLocaleString()} Ru`, inline: true },
-            { name: '📝 詳細', value: description, inline: false }
-          );
-        break;
-
       case 'monthly_salary':
         embed
           .setColor('#f39c12')

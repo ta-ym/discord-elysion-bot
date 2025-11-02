@@ -1,10 +1,9 @@
 import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
 import { Command, Event } from './types';
 import { Database } from './database';
-import { VCManager } from './vcManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
-import { initializeSecretVCPanel } from './utils/panelManager';
+
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -16,7 +15,6 @@ class ElysionBot {
   public client: Client;
   public commands: Collection<string, Command>;
   public database: Database;
-  public vcManager: VCManager;
 
   constructor() {
     this.client = new Client({
@@ -31,7 +29,6 @@ class ElysionBot {
 
     this.commands = new Collection();
     this.database = new Database();
-    this.vcManager = new VCManager(this.client, this.database);
     this.loadCommands();
     this.loadEvents();
   }
@@ -112,10 +109,6 @@ class ElysionBot {
         // 通話時間追跡システムを初期化
         initializeVoiceTimeTracker(this.client, this.database);
         console.log('Voice time tracker initialized');
-
-        // シークレットVCパネルを初期化
-        await initializeSecretVCPanel(this.client);
-        console.log('Secret VC panel initialized');
       });
 
       console.log('Bot started successfully!');

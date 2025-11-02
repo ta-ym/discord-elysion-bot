@@ -5,7 +5,6 @@ import path from 'path';
 interface BackupData {
   users: any[];
   transactions: any[];
-  secret_vcs: any[];
   backup_date: string;
   version: string;
 }
@@ -31,7 +30,6 @@ export class DatabaseBackup {
       const backupData: BackupData = {
         users: [],
         transactions: [],
-        secret_vcs: [],
         backup_date: new Date().toISOString(),
         version: '1.0.0'
       };

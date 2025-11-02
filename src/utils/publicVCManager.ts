@@ -16,7 +16,7 @@ import { Database } from '../database';
 
 // 虹色の楽園スレッドID
 const RAINBOW_PARADISE_THREAD_ID = '1431727691207413780';
-// 公開VCカテゴリID（シークレットVCと同じカテゴリを使用）
+// 公開VCカテゴリID
 const PUBLIC_VC_CATEGORY_ID = '1425044725865648148';
 
 /**

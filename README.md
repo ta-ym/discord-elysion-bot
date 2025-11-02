@@ -1,6 +1,8 @@
 # Discord Elysion Bot
 
-TypeScriptで構築されたDiscordボット。独自のサーバー内通貨「Ru_men」システムと、シークレットボイスチャンネル作成機能を提供します。
+TypeSc4. または `/salary-config add` コマンドで動的に追加
+
+### 🔒 セキュリティ機能scordボット。独自のサーバー内通貨「Ru_men」システムと、シークレットボイスチャンネル作成機能を提供します。
 
 ## 🌟 主要機能
 
@@ -173,23 +175,6 @@ https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=85
 /salary-config toggle role:@一時停止ロール  # 有効/無効切り替え
 ```
 
-### 🎪 シークレットVC機能
-
-#### `/create-vc`
-500 RuでシークレットVCを作成します。
-```
-/create-vc name:プライベートルーム
-```
-
-**機能**:
-- 最大2人まで参加可能
-- 5分間無人で自動削除
-- 作成者のみアクセス権限設定可能
-- ボタンによる管理機能：
-  - 🖊️ チャンネル名変更
-  - 👥 ユーザー招待
-  - 🗑️ VC削除
-
 ## 📁 プロジェクト構造
 
 ```
@@ -320,18 +305,6 @@ CREATE TABLE transactions (
   type TEXT NOT NULL CHECK (type IN ('transfer', 'admin_give', 'vc_purchase')),
   description TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**secret_vcs テーブル**
-```sql
-CREATE TABLE secret_vcs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  channel_id TEXT UNIQUE NOT NULL,
-  creator_id TEXT NOT NULL,
-  channel_name TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 ```
 

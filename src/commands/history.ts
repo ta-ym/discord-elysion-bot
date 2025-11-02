@@ -66,11 +66,6 @@ const historyCommand: Command = {
               description = `+${transaction.amount.toLocaleString()} Ru`;
             }
             break;
-          case 'vc_purchase':
-            emoji = '🎪';
-            title = 'シークレットVC作成';
-            description = `-${transaction.amount.toLocaleString()} Ru`;
-            break;
         }
 
         const date = new Date(transaction.created_at).toLocaleString('ja-JP', {

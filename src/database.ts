@@ -19,16 +19,6 @@ export interface Transaction {
   created_at: string;
 }
 
-export interface SecretVC {
-  id: number;
-  channel_id: string;
-  creator_id: string;
-  channel_name: string;
-  created_at: string;
-  last_activity: string;
-  expires_at?: string; // 削除予定時刻
-}
-
 export interface MonthlySalaryClaim {
   id: number;
   user_id: string;
@@ -128,19 +118,6 @@ export class Database {
         type TEXT NOT NULL CHECK (type IN ('transfer', 'admin_give', 'vc_purchase')),
         description TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // シークレットVCテーブル
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS secret_vcs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        channel_id TEXT UNIQUE NOT NULL,
-        creator_id TEXT NOT NULL,
-        channel_name TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
-        expires_at DATETIME
       )
     `);
 
@@ -288,85 +265,6 @@ export class Database {
          LIMIT ?`,
         [discordId, discordId, limit],
         (err, rows: Transaction[]) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
-  }
-
-  // シークレットVC関連メソッド
-  async addSecretVC(channelId: string, creatorId: string, channelName: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'INSERT INTO secret_vcs (channel_id, creator_id, channel_name) VALUES (?, ?, ?)',
-        [channelId, creatorId, channelName],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
-  }
-
-  async addSecretVCWithExpiry(channelId: string, creatorId: string, channelName: string, expiresAt: Date): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'INSERT INTO secret_vcs (channel_id, creator_id, channel_name, expires_at) VALUES (?, ?, ?, ?)',
-        [channelId, creatorId, channelName, expiresAt.toISOString()],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
-  }
-
-  async updateVCActivity(channelId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'UPDATE secret_vcs SET last_activity = CURRENT_TIMESTAMP WHERE channel_id = ?',
-        [channelId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
-  }
-
-  async getSecretVC(channelId: string): Promise<SecretVC | null> {
-    return new Promise((resolve, reject) => {
-      this.db.get(
-        'SELECT * FROM secret_vcs WHERE channel_id = ?',
-        [channelId],
-        (err, row: SecretVC) => {
-          if (err) reject(err);
-          else resolve(row || null);
-        }
-      );
-    });
-  }
-
-  async removeSecretVC(channelId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'DELETE FROM secret_vcs WHERE channel_id = ?',
-        [channelId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
-  }
-
-  async getInactiveVCs(minutesAgo: number = 5): Promise<SecretVC[]> {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        `SELECT * FROM secret_vcs 
-         WHERE datetime(last_activity) <= datetime('now', '-${minutesAgo} minutes')`,
-        (err, rows: SecretVC[]) => {
           if (err) reject(err);
           else resolve(rows || []);
         }
