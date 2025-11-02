@@ -70,10 +70,32 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
     }
 
     // 残高チェック
-    const user = await database.getUser(interaction.user.id);
-    if (!user || user.balance < planInfo.cost) {
+    console.log(`[TEMP VC DEBUG] Checking balance for user: ${interaction.user.id}`);
+    let user = await database.getUser(interaction.user.id);
+    console.log(`[TEMP VC DEBUG] Initial user data:`, user);
+    
+    // ユーザーが存在しない場合は作成
+    if (!user) {
+      console.log(`[TEMP VC DEBUG] User not found, creating new user`);
+      try {
+        user = await database.createUser(interaction.user.id);
+        console.log(`[TEMP VC DEBUG] Created new user:`, user);
+      } catch (error) {
+        console.log(`[TEMP VC DEBUG] User creation failed, trying to get existing user:`, error);
+        // 既に存在する場合は再取得
+        user = await database.getUser(interaction.user.id);
+        if (!user) {
+          throw new Error('Failed to get or create user');
+        }
+      }
+    }
+    
+    console.log(`[TEMP VC DEBUG] Required cost: ${planInfo.cost}, User balance: ${user.balance}`);
+    
+    if (user.balance < planInfo.cost) {
+      console.log(`[TEMP VC DEBUG] Balance check failed - Balance: ${user.balance}, Required: ${planInfo.cost}`);
       await interaction.reply({
-        content: `❌ 残高が不足しています。\n必要: ${planInfo.cost.toLocaleString()} Ru\n現在の残高: ${user?.balance.toLocaleString() || 0} Ru`,
+        content: `❌ 残高が不足しています。\n必要: ${planInfo.cost.toLocaleString()} Ru\n現在の残高: ${user.balance.toLocaleString()} Ru\n\nプラン: ${planInfo.label}`,
         ephemeral: true
       });
       return;
@@ -88,11 +110,11 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
       return;
     }
 
-    // 作成中メッセージを表示
+    // 作成中メッセージを表示（タイムアウト防止）
     const creatingEmbed = new EmbedBuilder()
       .setColor('#ffaa00')
-      .setTitle('🔄 一時VC作成中...')
-      .setDescription('チャンネルを作成しています。しばらくお待ちください。')
+      .setTitle('🔄 プライベートVC作成中...')
+      .setDescription(`チャンネルを作成しています。しばらくお待ちください。\n\n**プラン**: ${planInfo.label}\n**料金**: ${planInfo.cost.toLocaleString()} Ru`)
       .setTimestamp();
 
     await interaction.reply({ embeds: [creatingEmbed], ephemeral: true });
@@ -176,10 +198,17 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
   } catch (error) {
     console.error('Error in createTempVC:', error);
     try {
-      await interaction.reply({
-        content: '❌ 処理中にエラーが発生しました。',
-        ephemeral: true
-      });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ エラーが発生しました')
+        .setDescription('処理中にエラーが発生しました。しばらく待ってから再度お試しください。')
+        .setTimestamp();
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ embeds: [errorEmbed] });
+      } else {
+        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      }
     } catch (replyError) {
       console.error('Error sending error reply:', replyError);
     }
