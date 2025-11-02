@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
 import { Command, Event } from './types';
 import { Database } from './database';
+import { TempVCManager } from './utils/tempVCManagerClass';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
 
@@ -15,6 +16,7 @@ class ElysionBot {
   public client: Client;
   public commands: Collection<string, Command>;
   public database: Database;
+  public tempVCManager?: TempVCManager;
 
   constructor() {
     this.client = new Client({
@@ -102,6 +104,11 @@ class ElysionBot {
       // Ready イベントで通貨ロガー初期化
       this.client.once(Events.ClientReady, async () => {
         console.log('Bot is ready!');
+        
+        // 一時VC管理システムを初期化
+        this.tempVCManager = new TempVCManager(this.client);
+        console.log('TempVC manager initialized');
+        
         // 通貨ロガーを初期化
         initializeCurrencyLogger(this.client);
         console.log('Currency logger initialized');

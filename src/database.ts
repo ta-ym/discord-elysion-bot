@@ -40,6 +40,15 @@ export interface PublicVC {
   last_activity: string;
 }
 
+export interface TempVC {
+  id: number;
+  channel_id: string;
+  creator_id: string;
+  channel_name: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export interface VoiceSession {
   id: number;
   user_id: string;
@@ -131,6 +140,18 @@ export class Database {
         description TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 一時VCテーブル（12時間で自動削除）
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS temp_vcs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id TEXT UNIQUE NOT NULL,
+        creator_id TEXT NOT NULL,
+        channel_name TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL
       )
     `);
 
@@ -265,6 +286,58 @@ export class Database {
          LIMIT ?`,
         [discordId, discordId, limit],
         (err, rows: Transaction[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // TempVC関連メソッド
+  async addTempVC(channelId: string, creatorId: string, channelName: string, expiresAt: Date): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO temp_vcs (channel_id, creator_id, channel_name, expires_at) VALUES (?, ?, ?, ?)',
+        [channelId, creatorId, channelName, expiresAt.toISOString()],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getTempVC(channelId: string): Promise<TempVC | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM temp_vcs WHERE channel_id = ?',
+        [channelId],
+        (err, row: TempVC) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async removeTempVC(channelId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'DELETE FROM temp_vcs WHERE channel_id = ?',
+        [channelId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getExpiredTempVCs(): Promise<TempVC[]> {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM temp_vcs WHERE datetime(expires_at) <= datetime("now")',
+        (err, rows: TempVC[]) => {
           if (err) reject(err);
           else resolve(rows || []);
         }

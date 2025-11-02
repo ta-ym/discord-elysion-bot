@@ -1,4 +1,4 @@
-import { Events } from 'discord.js';
+import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 import { Event } from '../types';
 import {
   showPublicVCCreationModal,
@@ -13,6 +13,29 @@ const buttonInteractionEvent: Event = {
     if (!interaction.isButton()) return;
 
     try {
+      // 一時VC作成
+      if (interaction.customId === 'create_temp_vc') {
+        const modal = new ModalBuilder()
+          .setCustomId('temp_vc_creation_modal')
+          .setTitle('一時VC作成');
+
+        const channelNameInput = new TextInputBuilder()
+          .setCustomId('channel_name')
+          .setLabel('チャンネル名')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('チャンネル名を入力してください（30文字以内）')
+          .setRequired(true)
+          .setMaxLength(30);
+
+        const nameRow = new ActionRowBuilder<TextInputBuilder>()
+          .addComponents(channelNameInput);
+
+        modal.addComponents(nameRow);
+
+        await interaction.showModal(modal);
+        return;
+      }
+
       // 公開VC作成・管理
       if (interaction.customId === 'create_public_vc') {
         await showPublicVCCreationModal(interaction);
