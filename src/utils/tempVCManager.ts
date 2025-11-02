@@ -103,7 +103,7 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
         name: channelName,
         type: ChannelType.GuildVoice,
         parent: TEMP_VC_CATEGORY_ID,
-        userLimit: 2, // 最大2人まで
+        userLimit: 2, // 初期は2人まで（MusicBot参加時に自動で3人に変更）
         permissionOverwrites: [
           {
             id: guild.roles.everyone,
@@ -151,7 +151,7 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
           { name: '👤 作成者', value: `<@${interaction.user.id}>`, inline: true },
           { name: '⏰ 有効期限', value: planInfo.label, inline: true },
           { name: '💰 料金', value: `${planInfo.cost.toLocaleString()} Ru`, inline: true },
-          { name: '👥 最大人数', value: '2人', inline: true },
+          { name: '👥 最大人数', value: '2人（MusicBot参加時は3人）', inline: true },
           { name: '🗑️ 削除予定', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
         )
         .setFooter({ text: `${planInfo.label}後に自動削除されます` })
@@ -260,10 +260,10 @@ export function createTempVCPanel() {
     .setDescription('権限のある人以外からは見えない、プライベートな一時VCを作成できます。')
     .addFields(
       { name: '🔐 プライバシー', value: '権限のある人以外は見えません', inline: true },
-      { name: '👥 最大人数', value: '2人まで', inline: true },
+      { name: '👥 最大人数', value: '2人まで（MusicBot参加時は自動で3人に拡張）', inline: true },
       { name: '� 料金システム', value: '時間に応じて課金', inline: true },
       { name: '⏰ 料金プラン', value: '• **6時間**: 5,000 Ru\n• **12時間**: 10,000 Ru\n• **24時間**: 30,000 Ru', inline: false },
-      { name: '🎯 用途', value: '• プライベートな会議\n• 2人での作業や相談\n• 限定的なディスカッション', inline: false }
+      { name: '🎯 用途', value: '• プライベートな会議\n• 2人での作業や相談\n• MusicBot自動対応（参加時に3人枠に拡張）\n• 限定的なディスカッション', inline: false }
     )
     .setFooter({ text: '料金は作成時に自動で引き落とされます' })
     .setTimestamp();
