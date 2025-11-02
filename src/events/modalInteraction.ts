@@ -10,7 +10,9 @@ const modalInteractionEvent: Event = {
     try {
       // 一時VC作成モーダル
       if (interaction.customId === 'temp_vc_creation_modal') {
+        console.log(`[TEMP VC] Modal submitted by ${interaction.user.tag}`);
         await createTempVC(interaction);
+        console.log(`[TEMP VC] VC creation completed for ${interaction.user.tag}`);
         return;
       }
 

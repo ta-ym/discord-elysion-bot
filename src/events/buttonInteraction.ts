@@ -15,6 +15,8 @@ const buttonInteractionEvent: Event = {
     try {
       // 一時VC作成
       if (interaction.customId === 'create_temp_vc') {
+        console.log(`[TEMP VC] Button clicked by ${interaction.user.tag}`);
+        
         const modal = new ModalBuilder()
           .setCustomId('temp_vc_creation_modal')
           .setTitle('一時VC作成');
@@ -33,6 +35,7 @@ const buttonInteractionEvent: Event = {
         modal.addComponents(nameRow);
 
         await interaction.showModal(modal);
+        console.log(`[TEMP VC] Modal shown to ${interaction.user.tag}`);
         return;
       }
 

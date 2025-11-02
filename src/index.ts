@@ -95,12 +95,12 @@ class ElysionBot {
 
   public async start(): Promise<void> {
     try {
-      if (!process.env.DISCORD_TOKEN) {
+      if (!process.env['DISCORD_TOKEN']) {
         throw new Error('DISCORD_TOKEN is not defined in environment variables');
       }
 
       // ボットログイン
-      await this.client.login(process.env.DISCORD_TOKEN);
+      await this.client.login(process.env['DISCORD_TOKEN']);
       
       // Ready イベントで通貨ロガー初期化
       this.client.once(Events.ClientReady, async () => {
