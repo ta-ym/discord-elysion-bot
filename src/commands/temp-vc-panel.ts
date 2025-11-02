@@ -1,16 +1,12 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
 import { Command } from '../types';
 import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { resendTempVCPanel } from '../utils/tempVCManager';
 
 const tempVcPanelCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('temp-vc-panel')
-    .setDescription('一時VC作成パネルを送信します（管理者専用）')
-    .addChannelOption(option =>
-      option.setName('channel')
-        .setDescription('パネルを送信するチャンネル')
-        .setRequired(false)
-    ),
+    .setDescription('一時VC作成パネルを再送信します（管理者専用）'),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;
@@ -25,45 +21,19 @@ const tempVcPanelCommand: Command = {
     }
 
     try {
-      const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
+      const success = await resendTempVCPanel(interaction.client);
       
-      if (!targetChannel || !('send' in targetChannel)) {
+      if (success) {
         await interaction.reply({
-          content: '❌ 指定されたチャンネルにメッセージを送信できません。',
+          content: '✅ 一時VC作成パネルを再送信しました。\n（古いパネルがあれば削除されました）',
           ephemeral: true
         });
-        return;
+      } else {
+        await interaction.reply({
+          content: '❌ パネルの送信に失敗しました。チャンネルが見つからない可能性があります。',
+          ephemeral: true
+        });
       }
-
-      // パネルエンベッドを作成
-      const panelEmbed = new EmbedBuilder()
-        .setColor('#00aaff')
-        .setTitle('⏰ 一時VC作成パネル')
-        .setDescription('12時間後に自動削除される一時的なボイスチャンネルを作成できます。')
-        .addFields(
-          { name: '⏳ 持続時間', value: '12時間', inline: true },
-          { name: '🏷️ チャンネル名', value: '自由に設定可能', inline: true },
-          { name: '👥 利用制限', value: 'なし（誰でも参加可能）', inline: true },
-          { name: '🎯 用途', value: '• 一時的な会議やディスカッション\n• イベントや作業用の専用チャンネル\n• プライベートな通話空間', inline: false }
-        )
-        .setFooter({ text: '作成から12時間後に自動的に削除されます' })
-        .setTimestamp();
-
-      const panelButton = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('create_temp_vc')
-            .setLabel('一時VC作成')
-            .setStyle(ButtonStyle.Primary)
-            .setEmoji('⏰')
-        );
-
-      await targetChannel.send({ embeds: [panelEmbed], components: [panelButton] });
-
-      await interaction.reply({
-        content: `✅ 一時VC作成パネルを ${targetChannel} に送信しました。`,
-        ephemeral: true
-      });
 
     } catch (error) {
       console.error('Temp VC panel command error:', error);
