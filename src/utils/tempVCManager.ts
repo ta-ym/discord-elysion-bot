@@ -8,7 +8,8 @@ import {
   ThreadChannel,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  PermissionFlagsBits
 } from 'discord.js';
 import { Database } from '../database';
 
@@ -18,9 +19,25 @@ const TEMP_VC_CATEGORY_ID = '1425044725865648148';
 const TEMP_VC_PANEL_CHANNEL_ID = '1433800545231044789';
 
 /**
+ * プラン情報取得
+ */
+function getPlanInfo(planType: string): { hours: number; cost: number; label: string } | null {
+  switch (planType) {
+    case '6h':
+      return { hours: 6, cost: 5000, label: '6時間' };
+    case '12h':
+      return { hours: 12, cost: 10000, label: '12時間' };
+    case '24h':
+      return { hours: 24, cost: 30000, label: '24時間' };
+    default:
+      return null;
+  }
+}
+
+/**
  * 一時VC作成
  */
-export async function createTempVC(interaction: ModalSubmitInteraction): Promise<void> {
+export async function createTempVC(interaction: ModalSubmitInteraction, planType: string = '12h'): Promise<void> {
   const database = new Database();
   
   try {
@@ -37,6 +54,26 @@ export async function createTempVC(interaction: ModalSubmitInteraction): Promise
     if (channelName.length > 30) {
       await interaction.reply({
         content: '❌ チャンネル名は30文字以内で入力してください。',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // プラン情報の取得
+    const planInfo = getPlanInfo(planType);
+    if (!planInfo) {
+      await interaction.reply({
+        content: '❌ 無効なプランが選択されました。',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // 残高チェック
+    const user = await database.getUser(interaction.user.id);
+    if (!user || user.balance < planInfo.cost) {
+      await interaction.reply({
+        content: `❌ 残高が不足しています。\n必要: ${planInfo.cost.toLocaleString()} Ru\n現在の残高: ${user?.balance.toLocaleString() || 0} Ru`,
         ephemeral: true
       });
       return;
@@ -66,32 +103,58 @@ export async function createTempVC(interaction: ModalSubmitInteraction): Promise
         name: channelName,
         type: ChannelType.GuildVoice,
         parent: TEMP_VC_CATEGORY_ID,
+        userLimit: 2, // 最大2人まで
         permissionOverwrites: [
           {
-            id: guild.id, // @everyone
-            allow: ['ViewChannel', 'Connect', 'Speak'],
+            id: guild.roles.everyone,
+            deny: [PermissionFlagsBits.ViewChannel], // 全員に対して閲覧を拒否
+          },
+          {
+            id: interaction.user.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.Connect,
+              PermissionFlagsBits.Speak,
+              PermissionFlagsBits.ManageChannels
+            ], // 作成者には全権限付与
           },
         ],
       });
 
-      // 12時間後の削除時刻を計算
+      // 期限を計算
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 12);
+      expiresAt.setHours(expiresAt.getHours() + planInfo.hours);
+
+      // 料金を引き落とし
+      const newBalance = user.balance - planInfo.cost;
+      await database.updateUserBalance(interaction.user.id, newBalance);
+      
+      // 取引履歴を記録
+      await database.addTransaction(
+        interaction.user.id, 
+        interaction.user.id, 
+        -planInfo.cost, 
+        'vc_purchase', 
+        `一時VC作成(${planInfo.label}): ${channelName}`
+      );
 
       // データベースに記録
-      await database.addTempVC(channel.id, interaction.user.id, channel.name, expiresAt);
+      await database.addTempVC(channel.id, interaction.user.id, channel.name, planInfo.hours, planInfo.cost, expiresAt);
 
       // 完了メッセージ
       const successEmbed = new EmbedBuilder()
         .setColor('#00ff00')
-        .setTitle('✅ 一時VC作成完了')
-        .setDescription(`<#${channel.id}> が作成されました！`)
+        .setTitle('✅ プライベート一時VC作成完了')
+        .setDescription(`🔒 <#${channel.id}> が作成されました！`)
         .addFields(
           { name: '🏷️ チャンネル名', value: channel.name, inline: true },
           { name: '👤 作成者', value: `<@${interaction.user.id}>`, inline: true },
-          { name: '⏰ 削除予定', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
+          { name: '⏰ 有効期限', value: planInfo.label, inline: true },
+          { name: '💰 料金', value: `${planInfo.cost.toLocaleString()} Ru`, inline: true },
+          { name: '👥 最大人数', value: '2人', inline: true },
+          { name: '🗑️ 削除予定', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:R>`, inline: true }
         )
-        .setFooter({ text: '12時間後に自動削除されます' })
+        .setFooter({ text: `${planInfo.label}後に自動削除されます` })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [successEmbed] });
@@ -192,25 +255,26 @@ export async function deleteTempVC(channelId: string, client: Client): Promise<b
  */
 export function createTempVCPanel() {
   const panelEmbed = new EmbedBuilder()
-    .setColor('#00aaff')
-    .setTitle('⏰ 一時VC作成パネル')
-    .setDescription('12時間後に自動削除される一時的なボイスチャンネルを作成できます。')
+    .setColor('#7c3aed')
+    .setTitle('🔒 プライベート一時VC作成パネル')
+    .setDescription('権限のある人以外からは見えない、プライベートな一時VCを作成できます。')
     .addFields(
-      { name: '⏳ 持続時間', value: '12時間', inline: true },
-      { name: '🏷️ チャンネル名', value: '自由に設定可能', inline: true },
-      { name: '👥 利用制限', value: 'なし（誰でも参加可能）', inline: true },
-      { name: '🎯 用途', value: '• 一時的な会議やディスカッション\n• イベントや作業用の専用チャンネル\n• プライベートな通話空間', inline: false }
+      { name: '🔐 プライバシー', value: '権限のある人以外は見えません', inline: true },
+      { name: '👥 最大人数', value: '2人まで', inline: true },
+      { name: '� 料金システム', value: '時間に応じて課金', inline: true },
+      { name: '⏰ 料金プラン', value: '• **6時間**: 5,000 Ru\n• **12時間**: 10,000 Ru\n• **24時間**: 30,000 Ru', inline: false },
+      { name: '🎯 用途', value: '• プライベートな会議\n• 2人での作業や相談\n• 限定的なディスカッション', inline: false }
     )
-    .setFooter({ text: '作成から12時間後に自動的に削除されます' })
+    .setFooter({ text: '料金は作成時に自動で引き落とされます' })
     .setTimestamp();
 
   const panelButton = new ActionRowBuilder<ButtonBuilder>()
     .addComponents(
       new ButtonBuilder()
         .setCustomId('create_temp_vc')
-        .setLabel('一時VC作成')
+        .setLabel('プライベートVC作成')
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('⏰')
+        .setEmoji('🔒')
     );
 
   console.log('[TEMP VC PANEL] Panel created with button customId: create_temp_vc');

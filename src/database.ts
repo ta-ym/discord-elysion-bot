@@ -45,6 +45,8 @@ export interface TempVC {
   channel_id: string;
   creator_id: string;
   channel_name: string;
+  duration_hours: number;
+  cost_ru: number;
   created_at: string;
   expires_at: string;
 }
@@ -143,13 +145,15 @@ export class Database {
       )
     `);
 
-    // 一時VCテーブル（12時間で自動削除）
+    // 一時VCテーブル（時間制限付き、料金システム）
     this.db.run(`
       CREATE TABLE IF NOT EXISTS temp_vcs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         channel_id TEXT UNIQUE NOT NULL,
         creator_id TEXT NOT NULL,
         channel_name TEXT NOT NULL,
+        duration_hours INTEGER NOT NULL,
+        cost_ru INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         expires_at DATETIME NOT NULL
       )
@@ -294,11 +298,11 @@ export class Database {
   }
 
   // TempVC関連メソッド
-  async addTempVC(channelId: string, creatorId: string, channelName: string, expiresAt: Date): Promise<void> {
+  async addTempVC(channelId: string, creatorId: string, channelName: string, durationHours: number, costRu: number, expiresAt: Date): Promise<void> {
     return new Promise((resolve, reject) => {
       this.db.run(
-        'INSERT INTO temp_vcs (channel_id, creator_id, channel_name, expires_at) VALUES (?, ?, ?, ?)',
-        [channelId, creatorId, channelName, expiresAt.toISOString()],
+        'INSERT INTO temp_vcs (channel_id, creator_id, channel_name, duration_hours, cost_ru, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [channelId, creatorId, channelName, durationHours, costRu, expiresAt.toISOString()],
         (err) => {
           if (err) reject(err);
           else resolve();
