@@ -12,31 +12,39 @@ const buttonInteractionEvent: Event = {
   execute: async (interaction) => {
     if (!interaction.isButton()) return;
 
+    console.log(`[BUTTON] Button interaction received: ${interaction.customId} by ${interaction.user.tag}`);
+
     try {
       // 一時VC作成
       if (interaction.customId === 'create_temp_vc') {
-        console.log(`[TEMP VC] Button clicked by ${interaction.user.tag}`);
+        console.log(`[TEMP VC] Processing button click by ${interaction.user.tag}`);
         
-        const modal = new ModalBuilder()
-          .setCustomId('temp_vc_creation_modal')
-          .setTitle('一時VC作成');
+        try {
+          const modal = new ModalBuilder()
+            .setCustomId('temp_vc_creation_modal')
+            .setTitle('一時VC作成');
 
-        const channelNameInput = new TextInputBuilder()
-          .setCustomId('channel_name')
-          .setLabel('チャンネル名')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('チャンネル名を入力してください（30文字以内）')
-          .setRequired(true)
-          .setMaxLength(30);
+          const channelNameInput = new TextInputBuilder()
+            .setCustomId('channel_name')
+            .setLabel('チャンネル名')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('チャンネル名を入力してください（30文字以内）')
+            .setRequired(true)
+            .setMaxLength(30);
 
-        const nameRow = new ActionRowBuilder<TextInputBuilder>()
-          .addComponents(channelNameInput);
+          const nameRow = new ActionRowBuilder<TextInputBuilder>()
+            .addComponents(channelNameInput);
 
-        modal.addComponents(nameRow);
+          modal.addComponents(nameRow);
 
-        await interaction.showModal(modal);
-        console.log(`[TEMP VC] Modal shown to ${interaction.user.tag}`);
-        return;
+          console.log(`[TEMP VC] About to show modal to ${interaction.user.tag}`);
+          await interaction.showModal(modal);
+          console.log(`[TEMP VC] Modal successfully shown to ${interaction.user.tag}`);
+          return;
+        } catch (modalError) {
+          console.error(`[TEMP VC] Error creating/showing modal:`, modalError);
+          throw modalError;
+        }
       }
 
       // 公開VC作成・管理
@@ -65,17 +73,29 @@ const buttonInteractionEvent: Event = {
       }
 
     } catch (error) {
-      console.error('Button interaction error:', error);
+      console.error(`[BUTTON] Button interaction error for ${interaction.customId}:`, error);
+      console.error(`[BUTTON] Error details:`, {
+        customId: interaction.customId,
+        user: interaction.user.tag,
+        guild: interaction.guild?.name,
+        channel: interaction.channel?.id,
+        replied: interaction.replied,
+        deferred: interaction.deferred
+      });
       
       try {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
-            content: '❌ エラーが発生しました。',
+            content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。',
             ephemeral: true
+          });
+        } else if (interaction.deferred) {
+          await interaction.editReply({
+            content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。'
           });
         }
       } catch (replyError) {
-        console.error('Failed to send error reply:', replyError);
+        console.error('[BUTTON] Failed to send error reply:', replyError);
       }
     }
   },

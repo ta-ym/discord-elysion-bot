@@ -89,7 +89,7 @@ class ElysionBot {
         this.client.on(event.name, (...args) => event.execute(...args));
       }
       
-      console.log(`[INFO] Event loaded: ${event.name}`);
+      console.log(`[INFO] Event loaded: ${event.name} from ${file}`);
     }
   }
 
