@@ -1,6 +1,7 @@
 import { Events, VoiceState } from 'discord.js';
 import { Event } from '../types';
 import { Database } from '../database';
+import { ProfileSearcher } from '../utils/profileSearcher';
 
 // MusicBotのユーザーID
 const MUSIC_BOT_IDS = [
@@ -22,6 +23,7 @@ const voiceStateUpdateEvent: Event = {
   execute: async (oldState: VoiceState, newState: VoiceState) => {
     try {
       const database = new Database();
+      const profileSearcher = new ProfileSearcher(newState.client);
       
       // チャンネルが一時VCかどうかをチェック
       const checkTempVC = async (channelId: string | null) => {
@@ -35,18 +37,30 @@ const voiceStateUpdateEvent: Event = {
 
       // MusicBotかどうかをチェック
       const isMusicBot = MUSIC_BOT_IDS.includes(newState.member?.user.id || '');
+      // Botかどうかをチェック（プロフィール投稿の対象外）
+      const isBot = newState.member?.user.bot || false;
 
       // 新しいチャンネルに参加した場合
-      if (newTempVC && newState.channel) {
-        console.log(`[TEMP VC] User ${newState.member?.user.tag} joined temp VC: ${newState.channel.name}`);
+      if (newState.channel && newState.member) {
+        console.log(`[VOICE] User ${newState.member.user.tag} joined VC: ${newState.channel.name}`);
         
-        if (isMusicBot) {
-          console.log(`[TEMP VC] MusicBot detected! Adjusting user limit to 3`);
-          try {
-            await newState.channel.setUserLimit(3);
-            console.log(`[TEMP VC] User limit set to 3 for ${newState.channel.name}`);
-          } catch (error) {
-            console.error(`[TEMP VC] Failed to update user limit:`, error);
+        // Botでない場合、プロフィールを投稿
+        if (!isBot) {
+          await profileSearcher.postProfileToVC(newState.channel, newState.member.user.id);
+        }
+
+        // 一時VCの場合の処理
+        if (newTempVC) {
+          console.log(`[TEMP VC] User ${newState.member.user.tag} joined temp VC: ${newState.channel.name}`);
+          
+          if (isMusicBot) {
+            console.log(`[TEMP VC] MusicBot detected! Adjusting user limit to 3`);
+            try {
+              await newState.channel.setUserLimit(3);
+              console.log(`[TEMP VC] User limit set to 3 for ${newState.channel.name}`);
+            } catch (error) {
+              console.error(`[TEMP VC] Failed to update user limit:`, error);
+            }
           }
         }
       }
@@ -77,7 +91,7 @@ const voiceStateUpdateEvent: Event = {
       }
 
     } catch (error) {
-      console.error('[TEMP VC] Error in voiceStateUpdate event:', error);
+      console.error('[VOICE] Error in voiceStateUpdate event:', error);
     }
   },
 };

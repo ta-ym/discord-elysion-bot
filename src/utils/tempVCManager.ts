@@ -16,8 +16,8 @@ import { sendVCCreationLog } from './ruLogger';
 
 // 一時VCカテゴリID
 const TEMP_VC_CATEGORY_ID = '1425044725865648148';
-// 一時VCパネル送信先チャンネルID
-const TEMP_VC_PANEL_CHANNEL_ID = '1433800545231044789';
+// 一時VCパネル送信先スレッドID
+const TEMP_VC_PANEL_CHANNEL_ID = '1433096344171712636';
 
 /**
  * プラン情報取得
@@ -195,6 +195,15 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
 
       await interaction.editReply({ embeds: [successEmbed] });
 
+      // VC内に設定パネルを送信
+      try {
+        const settingsPanel = createVCSettingsPanel(channel.name, 2);
+        await channel.send(settingsPanel);
+        console.log(`[VC SETTINGS] Settings panel sent to ${channel.name}`);
+      } catch (panelError) {
+        console.error('[VC SETTINGS] Error sending settings panel:', panelError);
+      }
+
       console.log(`[TEMP VC] Created: ${channel.name} by ${interaction.user.tag}, expires at ${expiresAt.toISOString()}`);
 
     } catch (error) {
@@ -304,11 +313,11 @@ export function createTempVCPanel() {
     .addFields(
       { name: '🔐 プライバシー', value: '権限のある人以外は見えません', inline: true },
       { name: '👥 最大人数', value: '2人まで（MusicBot参加時は自動で3人に拡張）', inline: true },
-      { name: '� 料金システム', value: '時間に応じて課金', inline: true },
-      { name: '⏰ 料金プラン', value: '• **6時間**: 5,000 Ru\n• **12時間**: 10,000 Ru\n• **24時間**: 30,000 Ru', inline: false },
-      { name: '🎯 用途', value: '• プライベートな会議\n• 2人での作業や相談\n• MusicBot自動対応（参加時に3人枠に拡張）\n• 限定的なディスカッション', inline: false }
+      { name: '🤖 MusicBot対応', value: '自動で3人枠に拡張', inline: true },
+      { name: '⏰ 料金プラン', value: '```📅 6時間  →  5,000 Ru\n📅 12時間 → 10,000 Ru\n📅 24時間 → 30,000 Ru```', inline: false },
+      { name: '🎯 用途例', value: '• プライベートな会議・相談\n• 作業用の限定空間\n• MusicBotでの音楽鑑賞\n• 少人数でのディスカッション', inline: false }
     )
-    .setFooter({ text: '料金は作成時に自動で引き落とされます' })
+    .setFooter({ text: '💰 料金は作成時に自動で引き落とされます' })
     .setTimestamp();
 
   const panelButton = new ActionRowBuilder<ButtonBuilder>()
@@ -372,7 +381,7 @@ export async function initializeTempVCPanel(client: Client): Promise<void> {
     const panelData = createTempVCPanel();
     await channel.send(panelData);
     
-    console.log(`Temp VC panel sent to channel: ${TEMP_VC_PANEL_CHANNEL_ID}`);
+    console.log(`Temp VC panel sent to thread: ${TEMP_VC_PANEL_CHANNEL_ID}`);
     
   } catch (error) {
     console.error('Error initializing Temp VC panel:', error);
@@ -425,5 +434,109 @@ export async function resendTempVCPanel(client: Client): Promise<boolean> {
   } catch (error) {
     console.error('Error resending Temp VC panel:', error);
     return false;
+  }
+}
+
+/**
+ * VC設定パネルを作成
+ */
+export function createVCSettingsPanel(channelName: string, currentLimit: number): any {
+  const settingsEmbed = new EmbedBuilder()
+    .setColor('#00d4aa')
+    .setTitle('🎛️ VC設定パネル')
+    .setDescription(`**${channelName}** の設定を変更できます`)
+    .addFields(
+      { name: '👥 現在の人数制限', value: `${currentLimit}人`, inline: true },
+      { name: '🔧 設定可能項目', value: '人数制限の変更', inline: true },
+      { name: '⚠️ 注意', value: '作成者のみ設定可能', inline: true }
+    )
+    .setFooter({ text: '設定を変更するには下のボタンを使用してください' })
+    .setTimestamp();
+
+  const settingsButtons = new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId('vc_limit_2')
+        .setLabel('2人')
+        .setStyle(currentLimit === 2 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setEmoji('👥'),
+      new ButtonBuilder()
+        .setCustomId('vc_limit_3')
+        .setLabel('3人')
+        .setStyle(currentLimit === 3 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setEmoji('👥'),
+      new ButtonBuilder()
+        .setCustomId('vc_limit_5')
+        .setLabel('5人')
+        .setStyle(currentLimit === 5 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setEmoji('👥'),
+      new ButtonBuilder()
+        .setCustomId('vc_limit_10')
+        .setLabel('10人')
+        .setStyle(currentLimit === 10 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setEmoji('👥'),
+      new ButtonBuilder()
+        .setCustomId('vc_limit_unlimited')
+        .setLabel('無制限')
+        .setStyle(currentLimit === 0 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setEmoji('♾️')
+    );
+
+  return { embeds: [settingsEmbed], components: [settingsButtons] };
+}
+
+/**
+ * VC人数制限を変更
+ */
+export async function changeVCLimit(interaction: any, newLimit: number): Promise<void> {
+  try {
+    const channel = interaction.channel as VoiceChannel;
+    if (!channel || channel.type !== ChannelType.GuildVoice) {
+      await interaction.reply({
+        content: '❌ この機能はボイスチャンネルでのみ使用できます。',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // データベースから一時VCかどうかと作成者をチェック
+    const database = new Database();
+    const tempVC = await database.getTempVC(channel.id);
+    
+    if (!tempVC) {
+      await interaction.reply({
+        content: '❌ この機能は一時VCでのみ使用できます。',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // 作成者かどうかをチェック
+    if (tempVC.creator_id !== interaction.user.id) {
+      await interaction.reply({
+        content: '❌ VC設定は作成者のみ変更できます。',
+        ephemeral: true
+      });
+      return;
+    }
+
+    // 人数制限を変更
+    await channel.setUserLimit(newLimit);
+    
+    const limitText = newLimit === 0 ? '無制限' : `${newLimit}人`;
+    
+    // 設定パネルを更新
+    const updatedPanel = createVCSettingsPanel(channel.name, newLimit);
+    await interaction.update(updatedPanel);
+
+    // 変更ログ
+    console.log(`[VC SETTINGS] ${interaction.user.tag} changed limit of ${channel.name} to ${limitText}`);
+
+  } catch (error) {
+    console.error('Error changing VC limit:', error);
+    await interaction.reply({
+      content: '❌ 設定変更中にエラーが発生しました。',
+      ephemeral: true
+    });
   }
 }

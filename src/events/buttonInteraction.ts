@@ -6,6 +6,7 @@ import {
   deletePublicVC,
   showPublicVCEditModal
 } from '../utils/publicVCManager';
+import { changeVCLimit } from '../utils/tempVCManager';
 
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -134,6 +135,39 @@ const buttonInteractionEvent: Event = {
       if (interaction.customId.startsWith('edit_public_vc_')) {
         const channelId = interaction.customId.split('_')[3];
         await showPublicVCEditModal(interaction, channelId);
+        return;
+      }
+
+      // VC人数制限設定
+      if (interaction.customId.startsWith('vc_limit_')) {
+        const limitType = interaction.customId.split('_')[2];
+        let newLimit: number;
+        
+        switch (limitType) {
+          case '2':
+            newLimit = 2;
+            break;
+          case '3':
+            newLimit = 3;
+            break;
+          case '5':
+            newLimit = 5;
+            break;
+          case '10':
+            newLimit = 10;
+            break;
+          case 'unlimited':
+            newLimit = 0;
+            break;
+          default:
+            await interaction.reply({
+              content: '❌ 無効な人数設定です。',
+              ephemeral: true
+            });
+            return;
+        }
+
+        await changeVCLimit(interaction, newLimit);
         return;
       }
 
