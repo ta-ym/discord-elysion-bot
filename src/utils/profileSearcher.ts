@@ -12,6 +12,16 @@ const INTRODUCTION_CHANNEL_IDS = [
   '1425148949303660544'
 ];
 
+// 特定のVCに対するテキストチャンネルマッピング
+const VC_TO_TEXT_CHANNEL_MAPPING: { [vcChannelId: string]: string } = {
+  // 回廊のVCID（VC内チャット機能を使用）
+  '1425134212981194804': '1425134212981194804', // 回廊1 - VC内チャット
+  '1425134360545198213': '1425134360545198213', // 回廊2 - VC内チャット
+  '1425354770322821201': '1425354770322821201', // 回廊3 - VC内チャット
+  '1434529423746662540': '1434529423746662540', // 回廊4 - VC内チャット
+  '1434881517779419277': '1434881517779419277', // 回廊5 - VC内チャット
+};
+
 export class ProfileSearcher {
   private client: Client;
 
@@ -138,15 +148,41 @@ export class ProfileSearcher {
       // VCに対応するテキストチャンネルを取得
       let textChannel = null;
 
-      // 1. VCと完全に同じ名前のテキストチャンネルを探す（同じカテゴリ内）
-      textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
-        channel.type === 0 && // テキストチャンネル
-        channel.name === vcChannel.name && // 同じ名前
-        channel.parentId === vcChannel.parentId // 同じカテゴリ
-      );
+      // 0. 特定のVCに対する専用マッピングをチェック
+      if (VC_TO_TEXT_CHANNEL_MAPPING[vcChannel.id]) {
+        const mappedChannelId = VC_TO_TEXT_CHANNEL_MAPPING[vcChannel.id];
+        
+        // VC内チャットの場合、VCと同じIDなのでVCオブジェクトを直接使用
+        if (mappedChannelId === vcChannel.id) {
+          textChannel = vcChannel;
+          console.log(`[PROFILE] Using VC's integrated text chat: ${textChannel.name} (ID: ${textChannel.id})`);
+        } else {
+          try {
+            textChannel = await vcChannel.guild.channels.fetch(mappedChannelId);
+            if (textChannel && textChannel.type === 0) {
+              console.log(`[PROFILE] Found mapped text channel: ${textChannel.name} (ID: ${textChannel.id})`);
+            } else {
+              console.log(`[PROFILE] Mapped channel ${mappedChannelId} is not a text channel or not found`);
+              textChannel = null;
+            }
+          } catch (error) {
+            console.log(`[PROFILE] Failed to fetch mapped channel ${mappedChannelId}:`, error);
+            textChannel = null;
+          }
+        }
+      }
 
-      if (textChannel) {
-        console.log(`[PROFILE] Found exact match text channel: ${textChannel.name} (ID: ${textChannel.id})`);
+      // 1. VCと完全に同じ名前のテキストチャンネルを探す（同じカテゴリ内）
+      if (!textChannel) {
+        textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
+          channel.type === 0 && // テキストチャンネル
+          channel.name === vcChannel.name && // 同じ名前
+          channel.parentId === vcChannel.parentId // 同じカテゴリ
+        );
+
+        if (textChannel) {
+          console.log(`[PROFILE] Found exact match text channel: ${textChannel.name} (ID: ${textChannel.id})`);
+        }
       }
 
       // 1.5. 特殊文字を除去して再検索
@@ -228,8 +264,34 @@ export class ProfileSearcher {
           textChannel = flexibleChannel;
           console.log(`[PROFILE] Found flexible match: "${textChannel.name}" (ID: ${textChannel.id})`);
         } else {
-          console.log(`[PROFILE] No flexible match found either. Giving up.`);
-          return;
+          // 5. 最後の手段：同じカテゴリ内で最も適切なテキストチャンネルを選択
+          console.log(`[PROFILE] No flexible match found. Attempting fallback selection.`);
+          
+          // 雑談系チャンネルを優先
+          const chatChannels = vcChannel.guild.channels.cache.filter((channel: any) => 
+            channel.type === 0 && 
+            channel.parentId === vcChannel.parentId &&
+            (channel.name.includes('雑談') || channel.name.includes('chat') || channel.name.includes('general'))
+          );
+          
+          if (chatChannels.size > 0) {
+            textChannel = chatChannels.first();
+            console.log(`[PROFILE] Found fallback chat channel: "${textChannel.name}" (ID: ${textChannel.id})`);
+          } else {
+            // それでもなければ、カテゴリ内の最初のテキストチャンネル
+            const anyTextChannel = vcChannel.guild.channels.cache.find((channel: any) => 
+              channel.type === 0 && 
+              channel.parentId === vcChannel.parentId
+            );
+            
+            if (anyTextChannel) {
+              textChannel = anyTextChannel;
+              console.log(`[PROFILE] Using first available text channel: "${textChannel.name}" (ID: ${textChannel.id})`);
+            } else {
+              console.log(`[PROFILE] No text channels found in category. Giving up.`);
+              return;
+            }
+          }
         }
       }
 
