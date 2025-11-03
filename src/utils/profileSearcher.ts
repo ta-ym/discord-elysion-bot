@@ -22,6 +22,9 @@ const VC_TO_TEXT_CHANNEL_MAPPING: { [vcChannelId: string]: string } = {
   '1434881517779419277': '1434881517779419277', // 回廊5 - VC内チャット
 };
 
+// プロフィール検索を有効にするカテゴリID
+const ALLOWED_CATEGORY_ID = '1424762646279753860'; // 天界カテゴリ
+
 export class ProfileSearcher {
   private client: Client;
 
@@ -135,6 +138,12 @@ export class ProfileSearcher {
    */
   async postProfileToVC(vcChannel: any, userId: string): Promise<void> {
     try {
+      // 天界カテゴリ以外では動作しない
+      if (vcChannel.parentId !== ALLOWED_CATEGORY_ID) {
+        console.log(`[PROFILE] Skipping profile post - VC ${vcChannel.name} is not in allowed category (${vcChannel.parentId})`);
+        return;
+      }
+
       // ユーザーのプロフィールを検索
       const profileMessage = await this.findUserProfile(userId);
       
