@@ -26,23 +26,59 @@ export class ProfileSearcher {
    */
   async findUserProfile(userId: string): Promise<Message | null> {
     try {
+      console.log(`[PROFILE] Searching for profile of user ${userId}`);
+      
       for (const channelId of INTRODUCTION_CHANNEL_IDS) {
-        const channel = await this.client.channels.fetch(channelId) as TextChannel;
-        if (!channel || channel.type !== 0) continue; // テキストチャンネルでない場合はスキップ
+        console.log(`[PROFILE] Checking channel ${channelId}`);
+        
+        try {
+          const channel = await this.client.channels.fetch(channelId) as TextChannel;
+          if (!channel || channel.type !== 0) {
+            console.log(`[PROFILE] Channel ${channelId} is not a text channel or not accessible`);
+            continue;
+          }
 
-        // チャンネル内のメッセージを検索（最大100件）
-        const messages = await channel.messages.fetch({ limit: 100 });
-        
-        // 指定されたユーザーのメッセージを検索
-        const userMessage = messages.find(message => message.author.id === userId);
-        
-        if (userMessage) {
-          console.log(`[PROFILE] Found profile for user ${userId} in channel ${channelId}`);
-          return userMessage;
+          // チャンネル内のメッセージを検索（最大500件、複数回に分けて取得）
+          let messages = await channel.messages.fetch({ limit: 100 });
+          
+          // 指定されたユーザーのメッセージを検索
+          let userMessage = messages.find(message => message.author.id === userId);
+          
+          if (userMessage) {
+            console.log(`[PROFILE] Found profile for user ${userId} in channel ${channelId}`);
+            return userMessage;
+          }
+
+          // さらに古いメッセージも検索（最大500件まで）
+          for (let i = 0; i < 4; i++) {
+            if (messages.size === 0) break;
+            
+            const lastMessageId = messages.last()?.id;
+            if (!lastMessageId) break;
+            
+            const olderMessages = await channel.messages.fetch({ 
+              limit: 100, 
+              before: lastMessageId 
+            });
+            
+            if (olderMessages.size === 0) break;
+            
+            userMessage = olderMessages.find(message => message.author.id === userId);
+            if (userMessage) {
+              console.log(`[PROFILE] Found profile for user ${userId} in channel ${channelId} (older messages)`);
+              return userMessage;
+            }
+            
+            messages = olderMessages;
+          }
+          
+        } catch (channelError) {
+          console.error(`[PROFILE] Error accessing channel ${channelId}:`, channelError);
+          continue;
         }
       }
 
-      console.log(`[PROFILE] No profile found for user ${userId}`);
+      console.log(`[PROFILE] No profile found for user ${userId} in any introduction channel`);
       return null;
     } catch (error) {
       console.error(`[PROFILE] Error searching for user profile ${userId}:`, error);
@@ -97,24 +133,74 @@ export class ProfileSearcher {
         return;
       }
 
+      console.log(`[PROFILE] Looking for text channel for VC: ${vcChannel.name} (ID: ${vcChannel.id})`);
+
       // VCに対応するテキストチャンネルを取得
-      const textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
+      let textChannel = null;
+
+      // 1. VCと完全に同じ名前のテキストチャンネルを探す（同じカテゴリ内）
+      textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
         channel.type === 0 && // テキストチャンネル
         channel.name === vcChannel.name && // 同じ名前
         channel.parentId === vcChannel.parentId // 同じカテゴリ
       );
 
+      if (textChannel) {
+        console.log(`[PROFILE] Found exact match text channel: ${textChannel.name} (ID: ${textChannel.id})`);
+      }
+
+      // 2. VCのスレッドを探す
       if (!textChannel) {
-        console.log(`[PROFILE] No text channel found for VC ${vcChannel.name}`);
+        // VCに紐づくスレッドを探す
+        const threads = vcChannel.guild.channels.cache.filter((channel: any) => 
+          channel.isThread() && 
+          channel.name.includes(vcChannel.name)
+        );
+        
+        if (threads.size > 0) {
+          textChannel = threads.first();
+          console.log(`[PROFILE] Found thread for VC: ${textChannel.name} (ID: ${textChannel.id})`);
+        }
+      }
+
+      // 3. VC名に類似するテキストチャンネルを探す（同じカテゴリ内）
+      if (!textChannel) {
+        const vcNameLower = vcChannel.name.toLowerCase();
+        textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
+          channel.type === 0 && // テキストチャンネル
+          channel.parentId === vcChannel.parentId && // 同じカテゴリ
+          (channel.name.toLowerCase().includes(vcNameLower) || vcNameLower.includes(channel.name.toLowerCase()))
+        );
+        
+        if (textChannel) {
+          console.log(`[PROFILE] Found similar name text channel: ${textChannel.name} (ID: ${textChannel.id})`);
+        }
+      }
+
+      // 4. それでも見つからない場合は投稿しない（誤爆防止）
+      if (!textChannel) {
+        console.log(`[PROFILE] No dedicated text channel found for VC ${vcChannel.name}. Skipping to prevent posting to wrong channel.`);
+        console.log(`[PROFILE] Available channels in category ${vcChannel.parentId}:`);
+        const categoryChannels = vcChannel.guild.channels.cache.filter((ch: any) => ch.parentId === vcChannel.parentId);
+        categoryChannels.forEach((ch: any) => {
+          console.log(`  - ${ch.type === 0 ? 'TEXT' : ch.type === 2 ? 'VOICE' : 'OTHER'}: ${ch.name} (ID: ${ch.id})`);
+        });
         return;
       }
 
       // プロフィールエンベッドを作成
       const embed = this.createProfileEmbed(profileMessage);
       
+      // 参加者情報を追加
+      embed.addFields({
+        name: '🎤 参加したVC',
+        value: vcChannel.name,
+        inline: true
+      });
+      
       // テキストチャンネルに投稿
       await textChannel.send({ embeds: [embed] });
-      console.log(`[PROFILE] Posted profile for user ${userId} to ${textChannel.name}`);
+      console.log(`[PROFILE] Posted profile for user ${userId} to ${textChannel.name} (ID: ${textChannel.id})`);
 
     } catch (error) {
       console.error(`[PROFILE] Error posting profile for user ${userId}:`, error);

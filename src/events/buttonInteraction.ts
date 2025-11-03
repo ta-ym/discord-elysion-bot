@@ -200,4 +200,4 @@ const buttonInteractionEvent: Event = {
   },
 };
 
-export default buttonInteractionEvent;
+export = buttonInteractionEvent;

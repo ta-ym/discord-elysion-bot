@@ -96,4 +96,4 @@ const voiceStateUpdateEvent: Event = {
   },
 };
 
-export default voiceStateUpdateEvent;
+export = voiceStateUpdateEvent;
