@@ -25,11 +25,42 @@ const VC_TO_TEXT_CHANNEL_MAPPING: { [vcChannelId: string]: string } = {
 // プロフィール検索を有効にするカテゴリID
 const ALLOWED_CATEGORY_ID = '1424762646279753860'; // 天界カテゴリ
 
+// プロフィール投稿履歴を記録するMap（重複防止用）
+// キー: "チャンネルID_ユーザーID", 値: 最後の投稿時刻
+const PROFILE_POST_HISTORY = new Map<string, number>();
+
+// 重複投稿を防ぐ間隔（ミリ秒）- 5分間
+const DUPLICATE_PREVENTION_INTERVAL = 5 * 60 * 1000;
+
 export class ProfileSearcher {
   private client: Client;
 
   constructor(client: Client) {
     this.client = client;
+    
+    // 定期的に古い履歴をクリーンアップ（1時間ごと）
+    setInterval(() => {
+      this.cleanupOldHistory();
+    }, 60 * 60 * 1000);
+  }
+
+  /**
+   * 古い投稿履歴をクリーンアップする
+   */
+  private cleanupOldHistory(): void {
+    const currentTime = Date.now();
+    let cleanedCount = 0;
+
+    for (const [key, timestamp] of PROFILE_POST_HISTORY.entries()) {
+      if (currentTime - timestamp > DUPLICATE_PREVENTION_INTERVAL * 2) {
+        PROFILE_POST_HISTORY.delete(key);
+        cleanedCount++;
+      }
+    }
+
+    if (cleanedCount > 0) {
+      console.log(`[PROFILE] Cleaned up ${cleanedCount} old profile post history entries`);
+    }
   }
 
   /**
@@ -141,6 +172,17 @@ export class ProfileSearcher {
       // 天界カテゴリ以外では動作しない
       if (vcChannel.parentId !== ALLOWED_CATEGORY_ID) {
         console.log(`[PROFILE] Skipping profile post - VC ${vcChannel.name} is not in allowed category (${vcChannel.parentId})`);
+        return;
+      }
+
+      // 重複投稿チェック
+      const historyKey = `${vcChannel.id}_${userId}`;
+      const currentTime = Date.now();
+      const lastPostTime = PROFILE_POST_HISTORY.get(historyKey);
+
+      if (lastPostTime && (currentTime - lastPostTime) < DUPLICATE_PREVENTION_INTERVAL) {
+        const remainingTime = Math.ceil((DUPLICATE_PREVENTION_INTERVAL - (currentTime - lastPostTime)) / 1000 / 60);
+        console.log(`[PROFILE] Skipping duplicate post for user ${userId} in ${vcChannel.name} (last posted ${remainingTime} minutes ago)`);
         return;
       }
 
@@ -317,6 +359,9 @@ export class ProfileSearcher {
       // テキストチャンネルに投稿
       await textChannel.send({ embeds: [embed] });
       console.log(`[PROFILE] Posted profile for user ${userId} to ${textChannel.name} (ID: ${textChannel.id})`);
+
+      // 投稿履歴を記録（重複防止用）
+      PROFILE_POST_HISTORY.set(historyKey, currentTime);
 
     } catch (error) {
       console.error(`[PROFILE] Error posting profile for user ${userId}:`, error);
