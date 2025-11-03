@@ -12,6 +12,7 @@ import {
   PermissionFlagsBits
 } from 'discord.js';
 import { Database } from '../database';
+import { sendVCCreationLog } from './ruLogger';
 
 // 一時VCカテゴリID
 const TEMP_VC_CATEGORY_ID = '1425044725865648148';
@@ -160,6 +161,21 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
 
       // データベースに記録
       await database.addTempVC(channel.id, interaction.user.id, channel.name, planInfo.hours, planInfo.cost, expiresAt);
+
+      // Ruログを送信
+      try {
+        await sendVCCreationLog(
+          interaction.client,
+          interaction.user.id,
+          interaction.user.username,
+          channelName,
+          planInfo.cost,
+          planInfo.label,
+          newBalance
+        );
+      } catch (logError) {
+        console.error('[TEMP VC] Error sending Ru log:', logError);
+      }
 
       // 完了メッセージ
       const successEmbed = new EmbedBuilder()

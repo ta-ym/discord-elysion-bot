@@ -3,6 +3,7 @@ import { Command } from '../types';
 import { Database } from '../database';
 import { SecurityUtils, ErrorHandler } from '../utils/security';
 import { getCurrencyLogger } from '../utils/currencyLogger';
+import { sendTransferLog } from '../utils/ruLogger';
 
 const transferCommand: Command = {
   data: new SlashCommandBuilder()
@@ -158,6 +159,29 @@ const transferCommand: Command = {
                 type: 'transfer',
                 description: message || 'ユーザー間送金'
               });
+            }
+
+            // 送金ログを送信
+            try {
+              // 送金後の残高を取得
+              const updatedSender = await database.getUser(interaction.user.id);
+              const updatedReceiver = await database.getUser(targetUser.id);
+              
+              if (updatedSender && updatedReceiver) {
+                await sendTransferLog(
+                  interaction.client,
+                  interaction.user.id,
+                  interaction.user.username,
+                  targetUser.id,
+                  targetUser.username,
+                  amount,
+                  updatedSender.balance,
+                  updatedReceiver.balance,
+                  message
+                );
+              }
+            } catch (logError) {
+              console.error('[TRANSFER] Error sending transfer log:', logError);
             }
 
             const successEmbed = new EmbedBuilder()

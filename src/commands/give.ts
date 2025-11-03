@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Permiss
 import { Command } from '../types';
 import { Database } from '../database';
 import { getCurrencyLogger } from '../utils/currencyLogger';
+import { sendAdminGiveLog } from '../utils/ruLogger';
 
 const giveCommand: Command = {
   data: new SlashCommandBuilder()
@@ -70,6 +71,22 @@ const giveCommand: Command = {
           description: reason,
           executedBy: interaction.user.id
         });
+      }
+
+      // Ruログを送信
+      try {
+        await sendAdminGiveLog(
+          interaction.client,
+          interaction.user.id,
+          interaction.user.username,
+          targetUser.id,
+          targetUser.username,
+          amount,
+          newBalance,
+          reason
+        );
+      } catch (logError) {
+        console.error('[GIVE] Error sending Ru log:', logError);
       }
 
       const embed = new EmbedBuilder()
