@@ -149,6 +149,20 @@ export class ProfileSearcher {
         console.log(`[PROFILE] Found exact match text channel: ${textChannel.name} (ID: ${textChannel.id})`);
       }
 
+      // 1.5. 特殊文字を除去して再検索
+      if (!textChannel) {
+        const cleanVCName = vcChannel.name.replace(/[<>]/g, '');
+        textChannel = vcChannel.guild.channels.cache.find((channel: any) => 
+          channel.type === 0 && // テキストチャンネル
+          channel.name.replace(/[<>]/g, '') === cleanVCName && // 特殊文字を除去して比較
+          channel.parentId === vcChannel.parentId // 同じカテゴリ
+        );
+        
+        if (textChannel) {
+          console.log(`[PROFILE] Found match after cleaning special chars: ${textChannel.name} (ID: ${textChannel.id})`);
+        }
+      }
+
       // 2. VCのスレッドを探す
       if (!textChannel) {
         // VCに紐づくスレッドを探す
@@ -183,9 +197,40 @@ export class ProfileSearcher {
         console.log(`[PROFILE] Available channels in category ${vcChannel.parentId}:`);
         const categoryChannels = vcChannel.guild.channels.cache.filter((ch: any) => ch.parentId === vcChannel.parentId);
         categoryChannels.forEach((ch: any) => {
-          console.log(`  - ${ch.type === 0 ? 'TEXT' : ch.type === 2 ? 'VOICE' : 'OTHER'}: ${ch.name} (ID: ${ch.id})`);
+          const typeStr = ch.type === 0 ? 'TEXT' : ch.type === 2 ? 'VOICE' : ch.type === 4 ? 'CATEGORY' : ch.type === 10 ? 'THREAD' : `TYPE_${ch.type}`;
+          console.log(`  - ${typeStr}: "${ch.name}" (ID: ${ch.id})`);
         });
-        return;
+        
+        // さらに詳細な検索を試行
+        console.log(`[PROFILE] Attempting more flexible search for VC: "${vcChannel.name}"`);
+        
+        // VCの名前から特殊文字を除去して検索
+        const cleanVCName = vcChannel.name.replace(/[<>]/g, '');
+        console.log(`[PROFILE] Cleaned VC name: "${cleanVCName}"`);
+        
+        // より柔軟な検索
+        const flexibleChannel = vcChannel.guild.channels.cache.find((channel: any) => {
+          if (channel.type !== 0) return false; // テキストチャンネルのみ
+          if (channel.parentId !== vcChannel.parentId) return false; // 同じカテゴリのみ
+          
+          const channelNameClean = channel.name.replace(/[<>]/g, '').toLowerCase();
+          const vcNameClean = cleanVCName.toLowerCase();
+          
+          // 完全一致、部分一致、数字部分一致をチェック
+          return channelNameClean === vcNameClean ||
+                 channelNameClean.includes(vcNameClean) ||
+                 vcNameClean.includes(channelNameClean) ||
+                 // 数字部分のみでのマッチング（例: <回廊>2 → 2）
+                 (vcNameClean.match(/\d+$/) && channelNameClean === vcNameClean.match(/\d+$/)?.[0]);
+        });
+        
+        if (flexibleChannel) {
+          textChannel = flexibleChannel;
+          console.log(`[PROFILE] Found flexible match: "${textChannel.name}" (ID: ${textChannel.id})`);
+        } else {
+          console.log(`[PROFILE] No flexible match found either. Giving up.`);
+          return;
+        }
       }
 
       // プロフィールエンベッドを作成
