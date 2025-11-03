@@ -41,20 +41,21 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
   const database = new Database();
   
   try {
+    // 最初にインタラクションを延期（3秒制限を回避）
+    await interaction.deferReply({ ephemeral: true });
+
     const channelName = interaction.fields.getTextInputValue('channel_name');
     
     if (!channelName || channelName.trim().length === 0) {
-      await interaction.reply({
-        content: '❌ チャンネル名を入力してください。',
-        ephemeral: true
+      await interaction.editReply({
+        content: '❌ チャンネル名を入力してください。'
       });
       return;
     }
 
     if (channelName.length > 30) {
-      await interaction.reply({
-        content: '❌ チャンネル名は30文字以内で入力してください。',
-        ephemeral: true
+      await interaction.editReply({
+        content: '❌ チャンネル名は30文字以内で入力してください。'
       });
       return;
     }
@@ -62,9 +63,8 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
     // プラン情報の取得
     const planInfo = getPlanInfo(planType);
     if (!planInfo) {
-      await interaction.reply({
-        content: '❌ 無効なプランが選択されました。',
-        ephemeral: true
+      await interaction.editReply({
+        content: '❌ 無効なプランが選択されました。'
       });
       return;
     }
@@ -94,30 +94,28 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
     
     if (user.balance < planInfo.cost) {
       console.log(`[TEMP VC DEBUG] Balance check failed - Balance: ${user.balance}, Required: ${planInfo.cost}`);
-      await interaction.reply({
-        content: `❌ 残高が不足しています。\n必要: ${planInfo.cost.toLocaleString()} Ru\n現在の残高: ${user.balance.toLocaleString()} Ru\n\nプラン: ${planInfo.label}`,
-        ephemeral: true
+      await interaction.editReply({
+        content: `❌ 残高が不足しています。\n必要: ${planInfo.cost.toLocaleString()} Ru\n現在の残高: ${user.balance.toLocaleString()} Ru\n\nプラン: ${planInfo.label}`
       });
       return;
     }
 
     const guild = interaction.guild;
     if (!guild) {
-      await interaction.reply({
-        content: '❌ サーバー情報を取得できませんでした。',
-        ephemeral: true
+      await interaction.editReply({
+        content: '❌ サーバー情報を取得できませんでした。'
       });
       return;
     }
 
-    // 作成中メッセージを表示（タイムアウト防止）
+    // 作成中メッセージを表示
     const creatingEmbed = new EmbedBuilder()
       .setColor('#ffaa00')
       .setTitle('🔄 プライベートVC作成中...')
       .setDescription(`チャンネルを作成しています。しばらくお待ちください。\n\n**プラン**: ${planInfo.label}\n**料金**: ${planInfo.cost.toLocaleString()} Ru`)
       .setTimestamp();
 
-    await interaction.reply({ embeds: [creatingEmbed], ephemeral: true });
+    await interaction.editReply({ embeds: [creatingEmbed] });
 
     try {
       // VCを作成
@@ -204,9 +202,9 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
         .setDescription('処理中にエラーが発生しました。しばらく待ってから再度お試しください。')
         .setTimestamp();
 
-      if (interaction.replied || interaction.deferred) {
+      if (interaction.deferred) {
         await interaction.editReply({ embeds: [errorEmbed] });
-      } else {
+      } else if (!interaction.replied) {
         await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
       }
     } catch (replyError) {
