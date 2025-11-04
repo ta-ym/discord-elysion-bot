@@ -29,8 +29,8 @@ const ALLOWED_CATEGORY_ID = '1424762646279753860'; // 天界カテゴリ
 // キー: "チャンネルID_ユーザーID", 値: 最後の投稿時刻
 const PROFILE_POST_HISTORY = new Map<string, number>();
 
-// 重複投稿を防ぐ間隔（ミリ秒）- 5分間
-const DUPLICATE_PREVENTION_INTERVAL = 5 * 60 * 1000;
+// 重複投稿を防ぐ間隔（ミリ秒）- 10分間
+const DUPLICATE_PREVENTION_INTERVAL = 10 * 60 * 1000;
 
 export class ProfileSearcher {
   private client: Client;
