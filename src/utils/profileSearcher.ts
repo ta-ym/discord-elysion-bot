@@ -25,6 +25,15 @@ const VC_TO_TEXT_CHANNEL_MAPPING: { [vcChannelId: string]: string } = {
 // プロフィール検索を有効にするカテゴリID
 const ALLOWED_CATEGORY_ID = '1424762646279753860'; // 天界カテゴリ
 
+// プロフィール検索を有効にする特定のVCリスト（回廊1～5のみ）
+const ALLOWED_VC_IDS = [
+  '1425134212981194804', // 回廊1
+  '1425134360545198213', // 回廊2
+  '1425354770322821201', // 回廊3
+  '1434529423746662540', // 回廊4
+  '1434881517779419277', // 回廊5
+];
+
 // プロフィール投稿履歴を記録するMap（重複防止用）
 // キー: "チャンネルID_ユーザーID", 値: 最後の投稿時刻
 const PROFILE_POST_HISTORY = new Map<string, number>();
@@ -169,7 +178,13 @@ export class ProfileSearcher {
    */
   async postProfileToVC(vcChannel: any, userId: string): Promise<void> {
     try {
-      // 天界カテゴリ以外では動作しない
+      // 回廊1～5以外では動作しない
+      if (!ALLOWED_VC_IDS.includes(vcChannel.id)) {
+        console.log(`[PROFILE] Skipping profile post - VC ${vcChannel.name} (ID: ${vcChannel.id}) is not in allowed VC list`);
+        return;
+      }
+
+      // 念のため天界カテゴリかもチェック
       if (vcChannel.parentId !== ALLOWED_CATEGORY_ID) {
         console.log(`[PROFILE] Skipping profile post - VC ${vcChannel.name} is not in allowed category (${vcChannel.parentId})`);
         return;
