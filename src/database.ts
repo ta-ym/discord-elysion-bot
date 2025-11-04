@@ -215,12 +215,22 @@ export class Database {
   // ユーザー関連メソッド
   async getUser(discordId: string): Promise<User | null> {
     return new Promise((resolve, reject) => {
+      // 5秒のタイムアウトを設定
+      const timeout = setTimeout(() => {
+        reject(new Error('Database query timeout for getUser'));
+      }, 5000);
+
       this.db.get(
         'SELECT * FROM users WHERE discord_id = ?',
         [discordId],
         (err, row: User) => {
-          if (err) reject(err);
-          else resolve(row || null);
+          clearTimeout(timeout);
+          if (err) {
+            console.error('[DB] Error in getUser:', err);
+            reject(err);
+          } else {
+            resolve(row || null);
+          }
         }
       );
     });
@@ -228,12 +238,20 @@ export class Database {
 
   async createUser(discordId: string): Promise<User> {
     return new Promise((resolve, reject) => {
+      // 5秒のタイムアウトを設定
+      const timeout = setTimeout(() => {
+        reject(new Error('Database query timeout for createUser'));
+      }, 5000);
+
       this.db.run(
         'INSERT INTO users (discord_id) VALUES (?)',
         [discordId],
         function(err) {
-          if (err) reject(err);
-          else {
+          clearTimeout(timeout);
+          if (err) {
+            console.error('[DB] Error in createUser:', err);
+            reject(err);
+          } else {
             // 作成したユーザーを取得
             resolve({
               id: this.lastID.toString(),
