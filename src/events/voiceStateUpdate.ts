@@ -1,7 +1,8 @@
 import { Events, VoiceState } from 'discord.js';
 import { Event } from '../types';
-import { Database } from '../database';
 import { ProfileSearcher } from '../utils/profileSearcher';
+import { getSpecialVCTracker } from '../utils/specialVCTracker';
+import { globalDatabase } from '../index';
 
 // MusicBotのユーザーID
 const MUSIC_BOT_IDS = [
@@ -22,8 +23,9 @@ const voiceStateUpdateEvent: Event = {
   name: Events.VoiceStateUpdate,
   execute: async (oldState: VoiceState, newState: VoiceState) => {
     try {
-      const database = new Database();
+      const database = globalDatabase;
       const profileSearcher = new ProfileSearcher(newState.client);
+      const specialVCTracker = getSpecialVCTracker();
       
       // チャンネルが一時VCかどうかをチェック
       const checkTempVC = async (channelId: string | null) => {
@@ -39,6 +41,22 @@ const voiceStateUpdateEvent: Event = {
       const isMusicBot = MUSIC_BOT_IDS.includes(newState.member?.user.id || '');
       // Botかどうかをチェック（プロフィール投稿の対象外）
       const isBot = newState.member?.user.bot || false;
+
+      // 特別VC追跡処理（Bot以外）
+      if (specialVCTracker && !isBot) {
+        // VC参加の場合
+        if (newState.channel && !oldState.channel) {
+          await specialVCTracker.handleVoiceJoin(newState);
+        }
+        // VC退出の場合
+        else if (!newState.channel && oldState.channel) {
+          await specialVCTracker.handleVoiceLeave(oldState);
+        }
+        // VC移動の場合
+        else if (newState.channel && oldState.channel && newState.channelId !== oldState.channelId) {
+          await specialVCTracker.handleVoiceMove(oldState, newState);
+        }
+      }
 
       // 新しいチャンネルに参加した場合
       if (newState.channel && newState.member) {

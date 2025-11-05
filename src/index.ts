@@ -5,6 +5,7 @@ import { TempVCManager } from './utils/tempVCManagerClass';
 import { initializeTempVCPanel } from './utils/tempVCManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
+import { initializeSpecialVCTracker } from './utils/specialVCTracker';
 
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -12,6 +13,9 @@ import fs from 'fs';
 
 // 環境変数を読み込み
 dotenv.config();
+
+// グローバルなDatabaseインスタンス
+export let globalDatabase: Database;
 
 class ElysionBot {
   public client: Client;
@@ -32,6 +36,7 @@ class ElysionBot {
 
     this.commands = new Collection();
     this.database = new Database();
+    globalDatabase = this.database; // グローバルに設定
     this.loadCommands();
     this.loadEvents();
   }
@@ -121,6 +126,10 @@ class ElysionBot {
         // 通話時間追跡システムを初期化
         initializeVoiceTimeTracker(this.client, this.database);
         console.log('Voice time tracker initialized');
+        
+        // 特別VC追跡システムを初期化
+        initializeSpecialVCTracker(this.database);
+        console.log('Special VC tracker initialized');
       });
 
       console.log('Bot started successfully!');

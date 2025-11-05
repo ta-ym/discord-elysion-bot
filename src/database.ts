@@ -68,6 +68,32 @@ export interface VoiceTimeLog {
   total_minutes: number;
   angel_role_minutes: number;
   sessions_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SpecialVCSession {
+  id: number;
+  user_id: string;
+  channel_id: string;
+  channel_name: string;
+  vc_type: 'corridor' | 'evaluation'; // 回廊 or 評価
+  joined_at: string;
+  left_at?: string;
+  duration_minutes?: number;
+  has_angel_role: boolean;
+}
+
+export interface SpecialVCTimeLog {
+  id: number;
+  user_id: string;
+  date: string; // YYYY-MM-DD format
+  corridor_minutes: number; // 回廊での時間
+  evaluation_minutes: number; // 評価VCでの時間
+  corridor_sessions: number;
+  evaluation_sessions: number;
+  total_angel_corridor_minutes: number;
+  total_angel_evaluation_minutes: number;
   last_updated: string;
 }
 
@@ -108,6 +134,8 @@ export class Database {
   }
 
   private initializeTables(): void {
+    // serializeを使用してテーブル作成を順次実行
+    this.db.serialize(() => {
     // ユーザーテーブル
     this.db.run(`
       CREATE TABLE IF NOT EXISTS users (
@@ -201,6 +229,38 @@ export class Database {
       )
     `);
 
+    // 特別VC（回廊・評価）セッションテーブル
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS special_vc_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        channel_name TEXT NOT NULL,
+        vc_type TEXT NOT NULL, -- 'corridor' or 'evaluation'
+        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        left_at DATETIME,
+        duration_minutes INTEGER,
+        has_angel_role BOOLEAN DEFAULT FALSE
+      )
+    `);
+
+    // 特別VC時間ログテーブル（日次集計）
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS special_vc_time_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        corridor_minutes INTEGER DEFAULT 0,
+        evaluation_minutes INTEGER DEFAULT 0,
+        corridor_sessions INTEGER DEFAULT 0,
+        evaluation_sessions INTEGER DEFAULT 0,
+        total_angel_corridor_minutes INTEGER DEFAULT 0,
+        total_angel_evaluation_minutes INTEGER DEFAULT 0,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, date)
+      )
+    `);
+
     // インデックス作成
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_user_id ON voice_sessions(user_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_joined_at ON voice_sessions(joined_at)`);
@@ -208,8 +268,16 @@ export class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_user_id ON voice_time_logs(user_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_date ON voice_time_logs(date)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_angel_minutes ON voice_time_logs(angel_role_minutes)`);
+    
+    // 特別VCテーブルのインデックス
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_special_vc_sessions_user_id ON special_vc_sessions(user_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_special_vc_sessions_type ON special_vc_sessions(vc_type)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_special_vc_sessions_joined_at ON special_vc_sessions(joined_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_special_vc_time_logs_user_id ON special_vc_time_logs(user_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_special_vc_time_logs_date ON special_vc_time_logs(date)`);
 
     console.log('Database tables initialized');
+    }); // serialize終了
   }
 
   // ユーザー関連メソッド
@@ -965,6 +1033,141 @@ export class Database {
       }
 
       query += ' GROUP BY user_id ORDER BY total_angel_minutes DESC';
+
+      this.db.all(query, params, (err, rows: any[]) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+  }
+
+  // 特別VC（回廊・評価）関連メソッド
+  async startSpecialVCSession(userId: string, channelId: string, channelName: string, vcType: 'corridor' | 'evaluation', hasAngelRole: boolean): Promise<number> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO special_vc_sessions (user_id, channel_id, channel_name, vc_type, has_angel_role) VALUES (?, ?, ?, ?, ?)',
+        [userId, channelId, channelName, vcType, hasAngelRole],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this.lastID);
+        }
+      );
+    });
+  }
+
+  async endSpecialVCSession(sessionId: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        `UPDATE special_vc_sessions 
+         SET left_at = CURRENT_TIMESTAMP,
+             duration_minutes = ROUND((julianday(CURRENT_TIMESTAMP) - julianday(joined_at)) * 24 * 60)
+         WHERE id = ?`,
+        [sessionId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getActiveSpecialVCSession(userId: string, channelId: string): Promise<SpecialVCSession | null> {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM special_vc_sessions WHERE user_id = ? AND channel_id = ? AND left_at IS NULL ORDER BY joined_at DESC LIMIT 1',
+        [userId, channelId],
+        (err, row: SpecialVCSession) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  async updateSpecialVCTimeLog(userId: string, date: string, corridorMinutes: number, evaluationMinutes: number, angelCorridorMinutes: number, angelEvaluationMinutes: number, vcType: 'corridor' | 'evaluation'): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const corridorSessionsIncrement = vcType === 'corridor' ? 1 : 0;
+      const evaluationSessionsIncrement = vcType === 'evaluation' ? 1 : 0;
+
+      this.db.run(
+        `INSERT INTO special_vc_time_logs (user_id, date, corridor_minutes, evaluation_minutes, corridor_sessions, evaluation_sessions, total_angel_corridor_minutes, total_angel_evaluation_minutes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(user_id, date) DO UPDATE SET
+           corridor_minutes = corridor_minutes + excluded.corridor_minutes,
+           evaluation_minutes = evaluation_minutes + excluded.evaluation_minutes,
+           corridor_sessions = corridor_sessions + excluded.corridor_sessions,
+           evaluation_sessions = evaluation_sessions + excluded.evaluation_sessions,
+           total_angel_corridor_minutes = total_angel_corridor_minutes + excluded.total_angel_corridor_minutes,
+           total_angel_evaluation_minutes = total_angel_evaluation_minutes + excluded.total_angel_evaluation_minutes,
+           last_updated = CURRENT_TIMESTAMP`,
+        [userId, date, corridorMinutes, evaluationMinutes, corridorSessionsIncrement, evaluationSessionsIncrement, angelCorridorMinutes, angelEvaluationMinutes],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
+  async getSpecialVCStats(userId: string, startDate?: string, endDate?: string): Promise<SpecialVCTimeLog[]> {
+    return new Promise((resolve, reject) => {
+      let query = 'SELECT * FROM special_vc_time_logs WHERE user_id = ?';
+      const params: any[] = [userId];
+
+      if (startDate) {
+        query += ' AND date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        query += ' AND date <= ?';
+        params.push(endDate);
+      }
+
+      query += ' ORDER BY date DESC';
+
+      this.db.all(query, params, (err, rows: SpecialVCTimeLog[]) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      });
+    });
+  }
+
+  async getSpecialVCRanking(vcType: 'corridor' | 'evaluation' | 'both' = 'both', startDate?: string, endDate?: string): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      let timeField;
+      if (vcType === 'corridor') {
+        timeField = 'SUM(corridor_minutes) as total_minutes';
+      } else if (vcType === 'evaluation') {
+        timeField = 'SUM(evaluation_minutes) as total_minutes';
+      } else {
+        timeField = 'SUM(corridor_minutes + evaluation_minutes) as total_minutes';
+      }
+
+      let query = `
+        SELECT 
+          user_id,
+          ${timeField},
+          SUM(corridor_minutes) as corridor_minutes,
+          SUM(evaluation_minutes) as evaluation_minutes,
+          SUM(corridor_sessions) as corridor_sessions,
+          SUM(evaluation_sessions) as evaluation_sessions,
+          SUM(total_angel_corridor_minutes) as angel_corridor_minutes,
+          SUM(total_angel_evaluation_minutes) as angel_evaluation_minutes
+        FROM special_vc_time_logs 
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+
+      if (startDate) {
+        query += ' AND date >= ?';
+        params.push(startDate);
+      }
+      if (endDate) {
+        query += ' AND date <= ?';
+        params.push(endDate);
+      }
+
+      query += ' GROUP BY user_id ORDER BY total_minutes DESC';
 
       this.db.all(query, params, (err, rows: any[]) => {
         if (err) reject(err);
