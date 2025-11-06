@@ -171,6 +171,82 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // Pay コマンド確認ボタン処理
+      if (interaction.customId.startsWith('pay_confirm_')) {
+        console.log(`[PAY] Processing pay confirmation by ${interaction.user.tag}`);
+        
+        const parts = interaction.customId.split('_');
+        if (parts.length !== 5) { // pay_confirm_{userId}_{amount}_{timestamp}
+          await interaction.reply({
+            content: '❌ 無効な支払い情報です。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        const targetUserId = parts[2];
+        const amount = parseInt(parts[3]);
+        
+        if (isNaN(amount) || amount <= 0) {
+          await interaction.reply({
+            content: '❌ 無効な金額です。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        try {
+          // DatabaseインスタンスとPayment処理をインポート
+          const { globalDatabase } = await import('../index');
+          
+          const targetUser = await interaction.client.users.fetch(targetUserId);
+          if (!targetUser) {
+            await interaction.reply({
+              content: '❌ 対象ユーザーが見つかりません。',
+              ephemeral: true
+            });
+            return;
+          }
+
+          // 支払い実行
+          await globalDatabase.addTransaction(
+            interaction.user.id,
+            targetUserId,
+            amount,
+            'admin_give',
+            `支払い処理 (管理者: ${interaction.user.displayName})`
+          );
+
+          // 成功メッセージ
+          await interaction.update({
+            content: `✅ **支払い完了**\n\n👤 **対象:** ${targetUser.displayName}\n💰 **金額:** ${amount.toLocaleString()} Ru\n👨‍💼 **支払い者:** ${interaction.user.displayName}`,
+            embeds: [],
+            components: []
+          });
+
+          console.log(`[PAY] Payment completed: ${interaction.user.tag} paid ${amount} Ru to ${targetUser.tag}`);
+          return;
+        } catch (error) {
+          console.error('[PAY] Payment execution error:', error);
+          await interaction.update({
+            content: '❌ 支払い処理中にエラーが発生しました。',
+            embeds: [],
+            components: []
+          });
+          return;
+        }
+      }
+
+      // Pay コマンドキャンセルボタン処理
+      if (interaction.customId === 'pay_cancel') {
+        await interaction.update({
+          content: '❌ 支払いをキャンセルしました。',
+          embeds: [],
+          components: []
+        });
+        return;
+      }
+
     } catch (error) {
       console.error(`[BUTTON] Button interaction error for ${interaction.customId}:`, error);
       console.error(`[BUTTON] Error details:`, {
