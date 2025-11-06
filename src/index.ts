@@ -7,6 +7,7 @@ import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
 import { initializeSpecialVCTracker } from './utils/specialVCTracker';
 import { systemLogger } from './utils/systemLogger';
+import { railwayLogger } from './utils/railwayLogger';
 
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -114,6 +115,9 @@ class ElysionBot {
         
         // システムロガーを初期化
         systemLogger.setClient(this.client);
+        
+        // Railwayロガーを初期化
+        railwayLogger.setClient(this.client);
         
         // コンソールログインターセプトを有効化
         if (process.env['SYSTEM_LOG_CHANNEL_ID']) {

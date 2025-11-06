@@ -8,29 +8,27 @@ export class SystemLogger {
   private originalConsoleWarn: typeof console.warn;
 
   constructor() {
-    this.logChannelId = process.env['SYSTEM_LOG_CHANNEL_ID'] || null;
-    
-    console.log('[SYSTEM LOGGER] Initializing with channel ID:', this.logChannelId);
-    console.log('[SYSTEM LOGGER] Environment variables:', {
-      SYSTEM_LOG_CHANNEL_ID: process.env['SYSTEM_LOG_CHANNEL_ID'],
-      NODE_ENV: process.env['NODE_ENV']
-    });
-    
     // 元のconsoleメソッドを保存
     this.originalConsoleLog = console.log;
     this.originalConsoleError = console.error;
     this.originalConsoleWarn = console.warn;
+    
+    console.log('[SYSTEM LOGGER] Constructor called');
   }
 
   // Discordクライアントを設定
   setClient(client: Client): void {
     this.client = client;
     
-    // クライアント設定時に環境変数を再読み込み
+    // クライアント設定時に環境変数を読み込み
     this.logChannelId = process.env['SYSTEM_LOG_CHANNEL_ID'] || null;
     
     console.log('[SYSTEM LOGGER] Discord client set for system logging');
     console.log('[SYSTEM LOGGER] Channel ID:', this.logChannelId);
+    console.log('[SYSTEM LOGGER] Environment check:', {
+      SYSTEM_LOG_CHANNEL_ID: process.env['SYSTEM_LOG_CHANNEL_ID'],
+      NODE_ENV: process.env['NODE_ENV']
+    });
   }
 
   // コンソールログをオーバーライドしてDiscordにも送信
