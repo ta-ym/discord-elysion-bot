@@ -8,12 +8,34 @@ import {
 } from '../utils/publicVCManager';
 import { changeVCLimit } from '../utils/tempVCManager';
 
+// 処理済みインタラクションIDを記録するSet（メモリ内、最大1000件）
+const processedInteractions = new Set<string>();
+const MAX_PROCESSED_INTERACTIONS = 1000;
+
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
   execute: async (interaction) => {
     if (!interaction.isButton()) return;
 
     console.log(`[BUTTON] Button interaction received: ${interaction.customId} by ${interaction.user.tag}`);
+
+    // 重複処理を防ぐため、既に処理済みのインタラクションかチェック
+    const interactionKey = `${interaction.id}_${interaction.user.id}`;
+    if (processedInteractions.has(interactionKey)) {
+      console.log(`[BUTTON] Interaction ${interactionKey} already processed, skipping`);
+      return;
+    }
+
+    // インタラクションIDを記録
+    processedInteractions.add(interactionKey);
+    
+    // 古いエントリを削除してメモリ使用量を制限
+    if (processedInteractions.size > MAX_PROCESSED_INTERACTIONS) {
+      const entries = Array.from(processedInteractions);
+      processedInteractions.clear();
+      // 後半の500件を保持
+      entries.slice(-500).forEach(entry => processedInteractions.add(entry));
+    }
 
     try {
       // 一時VC作成プラン選択
