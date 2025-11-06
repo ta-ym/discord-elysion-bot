@@ -12,6 +12,9 @@
     "watch": "tsc --watch",
     "deploy-commands": "ts-node src/deploy-commands.ts",
     "migrate": "ts-node src/migrate.ts",
+    "migrate-data": "ts-node src/migrate-data.ts",
+    "inspect-data": "ts-node src/inspect-data.ts",
+    "test-postgresql": "ts-node src/test-postgresql.ts",
     "backup": "ts-node -e \"import('./src/backup.js').then(m => new m.DatabaseBackup().createBackup())\"",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"

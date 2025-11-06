@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Command } from '../types';
-import { Database } from '../database';
+import { globalDatabase } from '../index';
 import { SecurityUtils, ErrorHandler } from '../utils/security';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 import { sendTransferLog } from '../utils/ruLogger';
@@ -48,7 +48,7 @@ const transferCommand: Command = {
         return;
       }
 
-      const database = new Database();
+      const database = globalDatabase;
       
       // 自分に送金しようとしている場合
       if (targetUser.id === interaction.user.id) {

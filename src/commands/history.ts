@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
-import { Database } from '../database';
+import { globalDatabase } from '../index';
 
 const historyCommand: Command = {
   data: new SlashCommandBuilder()
@@ -15,7 +15,7 @@ const historyCommand: Command = {
   
   async execute(interaction: ChatInputCommandInteraction) {
     const limit = interaction.options.getInteger('limit') || 10;
-    const database = new Database();
+    const database = globalDatabase;
     
     try {
       // ユーザーを取得または作成

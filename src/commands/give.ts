@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { Command } from '../types';
-import { Database } from '../database';
+import { globalDatabase } from '../index';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 import { sendAdminGiveLog } from '../utils/ruLogger';
 
@@ -36,7 +36,7 @@ const giveCommand: Command = {
     const targetUser = interaction.options.getUser('user', true);
     const amount = interaction.options.getInteger('amount', true);
     const reason = interaction.options.getString('reason') || '管理者による付与';
-    const database = new Database();
+    const database = globalDatabase;
     
     try {
       // 対象ユーザーを取得または作成

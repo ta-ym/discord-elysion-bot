@@ -1,8 +1,9 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import { PostgreSQLDatabase } from './postgresDatabase';
 
 export interface User {
-  id: string;
+  id: number;
   discord_id: string;
   balance: number;
   created_at: string;
@@ -11,11 +12,11 @@ export interface User {
 
 export interface Transaction {
   id: number;
-  from_user_id: string;
+  from_user_id?: string;
   to_user_id: string;
   amount: number;
-  type: 'transfer' | 'admin_give' | 'vc_purchase';
-  description: string;
+  type: 'transfer' | 'admin_give' | 'vc_purchase' | 'salary' | 'voice_reward';
+  description?: string;
   created_at: string;
 }
 
@@ -99,8 +100,13 @@ export interface SpecialVCTimeLog {
 
 export class Database {
   private db: sqlite3.Database;
+  private pgDb: PostgreSQLDatabase;
 
   constructor() {
+    // PostgreSQL接続を初期化（通貨関連のデータ用）
+    this.pgDb = new PostgreSQLDatabase();
+    
+    // SQLite接続を初期化（VC関連のデータ用）
     // Railway環境ではメモリDBまたはwritableなディレクトリを使用
     const isProduction = process.env.NODE_ENV === 'production';
     let dbPath: string;
@@ -136,31 +142,7 @@ export class Database {
   private initializeTables(): void {
     // serializeを使用してテーブル作成を順次実行
     this.db.serialize(() => {
-    // ユーザーテーブル
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        discord_id TEXT UNIQUE NOT NULL,
-        balance INTEGER DEFAULT 10000,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // 取引履歴テーブル
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        from_user_id TEXT,
-        to_user_id TEXT NOT NULL,
-        amount INTEGER NOT NULL,
-        type TEXT NOT NULL CHECK (type IN ('transfer', 'admin_give', 'vc_purchase')),
-        description TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // 公開VCテーブル
+    // 公開VCテーブル（通貨関連テーブルはPostgreSQLに移行）
     this.db.run(`
       CREATE TABLE IF NOT EXISTS public_vcs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -187,22 +169,7 @@ export class Database {
       )
     `);
 
-    // 月給支給テーブル
-    this.db.run(`
-      CREATE TABLE IF NOT EXISTS monthly_salary_claims (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        role_id TEXT NOT NULL,
-        amount INTEGER NOT NULL,
-        claim_month TEXT NOT NULL,
-        paid_by TEXT NOT NULL,
-        description TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, claim_month)
-      )
-    `);
-
-    // 通話セッションテーブル
+    // 通話セッションテーブル（月給関連テーブルはPostgreSQLに移行）
     this.db.run(`
       CREATE TABLE IF NOT EXISTS voice_sessions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -280,107 +247,64 @@ export class Database {
     }); // serialize終了
   }
 
-  // ユーザー関連メソッド
+  // ユーザー関連メソッド（PostgreSQLに委譲）
   async getUser(discordId: string): Promise<User | null> {
-    return new Promise((resolve, reject) => {
-      // 5秒のタイムアウトを設定
-      const timeout = setTimeout(() => {
-        reject(new Error('Database query timeout for getUser'));
-      }, 5000);
-
-      this.db.get(
-        'SELECT * FROM users WHERE discord_id = ?',
-        [discordId],
-        (err, row: User) => {
-          clearTimeout(timeout);
-          if (err) {
-            console.error('[DB] Error in getUser:', err);
-            reject(err);
-          } else {
-            resolve(row || null);
-          }
-        }
-      );
-    });
+    return await this.pgDb.getUser(discordId);
   }
 
   async createUser(discordId: string): Promise<User> {
-    return new Promise((resolve, reject) => {
-      // 5秒のタイムアウトを設定
-      const timeout = setTimeout(() => {
-        reject(new Error('Database query timeout for createUser'));
-      }, 5000);
-
-      this.db.run(
-        'INSERT INTO users (discord_id) VALUES (?)',
-        [discordId],
-        function(err) {
-          clearTimeout(timeout);
-          if (err) {
-            console.error('[DB] Error in createUser:', err);
-            reject(err);
-          } else {
-            // 作成したユーザーを取得
-            resolve({
-              id: this.lastID.toString(),
-              discord_id: discordId,
-              balance: 10000,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-          }
-        }
-      );
-    });
+    return await this.pgDb.createUser(discordId);
   }
 
   async updateUserBalance(discordId: string, newBalance: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
-        [newBalance, discordId],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+    return await this.pgDb.updateUserBalance(discordId, newBalance);
   }
 
-  // 取引履歴関連メソッド
+  // 取引履歴関連メソッド（PostgreSQLに委譲）
   async addTransaction(
     fromUserId: string | null,
     toUserId: string,
     amount: number,
-    type: 'transfer' | 'admin_give' | 'vc_purchase',
-    description: string
+    type: 'transfer' | 'admin_give' | 'vc_purchase' | 'salary' | 'voice_reward',
+    description?: string
   ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.run(
-        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-        [fromUserId, toUserId, amount, type, description],
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-    });
+    await this.pgDb.createTransaction(fromUserId, toUserId, amount, type, description);
   }
 
   async getUserTransactions(discordId: string, limit: number = 10): Promise<Transaction[]> {
-    return new Promise((resolve, reject) => {
-      this.db.all(
-        `SELECT * FROM transactions 
-         WHERE from_user_id = ? OR to_user_id = ? 
-         ORDER BY created_at DESC 
-         LIMIT ?`,
-        [discordId, discordId, limit],
-        (err, rows: Transaction[]) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
+    return await this.pgDb.getTransactionHistory(discordId, limit);
+  }
+
+  async getTransactionHistory(discordId: string, limit: number = 10, offset: number = 0): Promise<Transaction[]> {
+    return await this.pgDb.getTransactionHistory(discordId, limit, offset);
+  }
+
+  // 月給関連メソッド（PostgreSQLに委譲）
+  async getSalaryConfigs(): Promise<any[]> {
+    return await this.pgDb.getSalaryConfigs();
+  }
+
+  async setSalaryConfig(roleId: string, roleName: string, amount: number): Promise<any> {
+    return await this.pgDb.setSalaryConfig(roleId, roleName, amount);
+  }
+
+  async hasSalaryClaim(userId: string, month: string): Promise<boolean> {
+    return await this.pgDb.hasSalaryClaim(userId, month);
+  }
+
+  async createSalaryClaim(
+    userId: string,
+    roleId: string,
+    amount: number,
+    month: string,
+    paidBy: string,
+    description?: string
+  ): Promise<void> {
+    return await this.pgDb.createSalaryClaim(userId, roleId, amount, month, paidBy, description);
+  }
+
+  async getSalaryHistory(userId: string): Promise<any[]> {
+    return await this.pgDb.getSalaryHistory(userId);
   }
 
   // TempVC関連メソッド

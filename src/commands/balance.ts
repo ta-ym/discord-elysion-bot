@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
-import { Database } from '../database';
+import { globalDatabase } from '../index';
 
 const balanceCommand: Command = {
   data: new SlashCommandBuilder()
@@ -11,7 +11,7 @@ const balanceCommand: Command = {
     // 最初に応答を延期（3秒のタイムアウト防止）
     await interaction.deferReply({ ephemeral: true });
     
-    const database = new Database();
+    const database = globalDatabase;
     
     try {
       console.log(`[BALANCE] Processing balance request for user ${interaction.user.id}`);
