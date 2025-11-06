@@ -352,6 +352,20 @@ export class PostgreSQLDatabase {
         return false;
       }
 
+      // 受取人が存在するかチェック（存在しない場合は作成）
+      const receiverCheck = await client.query(
+        'SELECT discord_id FROM users WHERE discord_id = $1',
+        [toId]
+      );
+      
+      if (receiverCheck.rows.length === 0) {
+        console.log(`[POSTGRES] Creating receiver user: ${toId}`);
+        await client.query(
+          'INSERT INTO users (discord_id, balance) VALUES ($1, 10000)',
+          [toId]
+        );
+      }
+
       // 送金者の残高を減額
       const updateSender = await client.query(
         'UPDATE users SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
@@ -359,12 +373,10 @@ export class PostgreSQLDatabase {
       );
       console.log(`[POSTGRES] Sender balance updated, affected rows:`, updateSender.rowCount);
 
-      // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+      // 受取人の残高を増額
       const updateReceiver = await client.query(
-        `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
-         ON CONFLICT(discord_id) DO UPDATE SET 
-         balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
-        [toId, amount]
+        'UPDATE users SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
+        [amount, toId]
       );
       console.log(`[POSTGRES] Receiver balance updated, affected rows:`, updateReceiver.rowCount);
 
