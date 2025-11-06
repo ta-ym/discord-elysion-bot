@@ -1,4 +1,4 @@
-import { Client, EmbedBuilder, TextChannel } from 'discord.js';
+import { Client, TextChannel } from 'discord.js';
 
 export class SystemLogger {
   private client: Client | null = null;
@@ -69,39 +69,17 @@ export class SystemLogger {
       const channel = await this.client.channels.fetch(this.logChannelId) as TextChannel;
       if (!channel || !channel.isTextBased()) return;
 
-      // レベルに応じて色を設定
-      const colors = {
-        INFO: 0x3498db,    // 青
-        WARN: 0xf39c12,    // オレンジ
-        ERROR: 0xe74c3c,   // 赤
-        SUCCESS: 0x2ecc71  // 緑
-      };
-
-      // レベルに応じて絵文字を設定
-      const emojis = {
-        INFO: 'ℹ️',
-        WARN: '⚠️',
-        ERROR: '❌',
-        SUCCESS: '✅'
-      };
-
-      const embed = new EmbedBuilder()
-        .setColor(colors[level])
-        .setTitle(`${emojis[level]} システムログ - ${level}`)
-        .setDescription(`\`\`\`\n${message.substring(0, 1900)}\`\`\``)
-        .setTimestamp()
-        .setFooter({ text: 'Elysion Bot System Logger' });
-
-      // メッセージが長すぎる場合は複数に分割
-      if (message.length > 1900) {
-        embed.addFields({
-          name: '⚠️ メッセージが切り詰められました',
-          value: `完全なメッセージ長: ${message.length} 文字`,
-          inline: false
-        });
+      const formattedMessage = `[${level}] ${message}`;
+      
+      // メッセージが2000文字を超える場合は分割
+      if (formattedMessage.length > 2000) {
+        const chunks = formattedMessage.match(/.{1,2000}/g) || [];
+        for (const chunk of chunks) {
+          await channel.send(chunk);
+        }
+      } else {
+        await channel.send(formattedMessage);
       }
-
-      await channel.send({ embeds: [embed] });
     } catch (error) {
       // ログ送信エラーは元のconsole.errorで出力（無限ループ防止）
       this.originalConsoleError('[SYSTEM LOGGER] Failed to send log to Discord:', error);
@@ -110,30 +88,21 @@ export class SystemLogger {
 
   // システム起動ログを送信
   async sendStartupLog(): Promise<void> {
-    const startupMessage = `🚀 Elysion Bot が起動しました\n` +
-      `📅 起動時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}\n` +
-      `🌐 環境: ${process.env['NODE_ENV'] || 'development'}\n` +
-      `📝 PostgreSQL: ${process.env['DISABLE_POSTGRESQL'] === 'true' ? '無効 (SQLite使用)' : '有効'}\n` +
-      `🔧 Node.js: ${process.version}`;
+    const startupMessage = `[STARTUP] Elysion Bot 起動 - ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} - ENV: ${process.env['NODE_ENV'] || 'development'} - PostgreSQL: ${process.env['DISABLE_POSTGRESQL'] === 'true' ? '無効(SQLite使用)' : '有効'} - Node.js: ${process.version}`;
 
     await this.sendToDiscord('SUCCESS', startupMessage);
   }
 
   // システム終了ログを送信
   async sendShutdownLog(): Promise<void> {
-    const shutdownMessage = `🛑 Elysion Bot がシャットダウンします\n` +
-      `📅 終了時刻: ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`;
+    const shutdownMessage = `[SHUTDOWN] Elysion Bot 終了 - ${new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}`;
 
     await this.sendToDiscord('WARN', shutdownMessage);
   }
 
   // エラーログを送信
   async sendErrorLog(error: Error, context?: string): Promise<void> {
-    const errorMessage = `💥 エラーが発生しました\n` +
-      `${context ? `📍 コンテキスト: ${context}\n` : ''}` +
-      `🔍 エラー名: ${error.name}\n` +
-      `📝 メッセージ: ${error.message}\n` +
-      `📊 スタックトレース:\n${error.stack}`;
+    const errorMessage = `[ERROR] ${context ? `[${context}] ` : ''}${error.name}: ${error.message}${error.stack ? `\nStack: ${error.stack}` : ''}`;
 
     await this.sendToDiscord('ERROR', errorMessage);
   }
