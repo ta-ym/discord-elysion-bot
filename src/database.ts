@@ -109,19 +109,35 @@ export class Database {
     this.usePostgreSQL = !disablePostgreSQL && !!process.env['DATABASE_URL'];
 
     // PostgreSQL接続を初期化（通貨関連のデータ用）
-    if (this.usePostgreSQL) {
+    if (this.usePostgreSQL && process.env['DATABASE_URL']) {
       try {
-        this.pgDb = new PostgreSQLDatabase();
+        // DATABASE_URLの形式をチェック
+        const dbUrl = process.env['DATABASE_URL'];
+        if (!dbUrl || dbUrl.includes('username:password@host:port') || dbUrl === 'postgresql://username:password@host:port/database') {
+          throw new Error('DATABASE_URL is not properly configured - contains placeholder values');
+        }
+        
+        console.log('PostgreSQL接続情報: {');
+        console.log(`  url: '${dbUrl.replace(/\/\/[^:]+:[^@]+@/, '//****:****@')}',`);
+        console.log(`  isProduction: ${process.env.NODE_ENV === 'production'}`);
+        console.log('}');
         console.log('PostgreSQL通貨システムを初期化中...');
+        
+        this.pgDb = new PostgreSQLDatabase();
       } catch (error) {
-        console.error('PostgreSQL初期化に失敗しました:', error);
-        console.error('SQLiteで通貨機能を継続します');
+        console.error('PostgreSQL初期化エラー:', error);
+        console.log('ボット起動を継続しますが、通貨機能は利用できません');
         this.pgDb = null;
         this.usePostgreSQL = false;
       }
     } else {
-      console.log('PostgreSQLが無効 - SQLiteで通貨機能を使用します');
+      if (disablePostgreSQL) {
+        console.log('PostgreSQLが無効化されています - SQLiteで通貨機能を使用します');
+      } else {
+        console.log('DATABASE_URLが設定されていません - SQLiteで通貨機能を使用します');
+      }
       this.pgDb = null;
+      this.usePostgreSQL = false;
     }
     
     // SQLite接続を初期化（VC関連のデータ用）
