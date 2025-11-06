@@ -648,6 +648,11 @@ export class Database {
 
   // システムによる支給（管理者IDなし）
   async giveMoney(toId: string, amount: number, description: string): Promise<void> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.giveMoney(toId, amount, description);
+    }
+    
+    // SQLiteフォールバック
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
         this.db.run('BEGIN TRANSACTION');
@@ -678,7 +683,6 @@ export class Database {
 
                 this.db.run('COMMIT', (err) => {
                   if (err) {
-                    this.db.run('ROLLBACK');
                     reject(err);
                   } else {
                     resolve();
@@ -806,6 +810,11 @@ export class Database {
 
   // 月給支給メソッド
   async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.payMonthlySalary(userId, roleId, amount, paidBy, description);
+    }
+    
+    // SQLiteフォールバック
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
 
     return new Promise((resolve, reject) => {
@@ -914,6 +923,11 @@ export class Database {
   }
 
   async getMonthlySalaryHistory(userId: string, limit: number = 12): Promise<MonthlySalaryClaim[]> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getMonthlySalaryHistory(userId, limit);
+    }
+    
+    // SQLiteフォールバック
     return new Promise((resolve, reject) => {
       this.db.all(
         'SELECT * FROM monthly_salary_claims WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
@@ -942,6 +956,11 @@ export class Database {
 
   // 指定月の支給状況確認
   async checkMonthlySalaryStatus(userId: string, month?: string): Promise<MonthlySalaryClaim | null> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.checkMonthlySalaryStatus(userId, month);
+    }
+    
+    // SQLiteフォールバック
     const targetMonth = month || new Date().toISOString().substring(0, 7);
     
     return new Promise((resolve, reject) => {

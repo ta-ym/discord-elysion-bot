@@ -380,6 +380,124 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 管理者による支給（残高チェック不要）
+  async giveMoney(toId: string, amount: number, description: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+      await client.query(
+        `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
+        [toId, amount]
+      );
+
+      // 取引履歴を記録
+      await client.query(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+        [null, toId, amount, 'admin_give', description]
+      );
+
+      await client.query('COMMIT');
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error in giveMoney:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 月給支給メソッド
+  async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
+    
+    try {
+      await client.query('BEGIN');
+
+      // 今月既に支給済みかチェック
+      const existingClaim = await client.query(
+        'SELECT id FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
+        [userId, currentMonth]
+      );
+
+      if (existingClaim.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return false; // 既に支給済み
+      }
+
+      // ユーザーの残高を増額（存在しない場合は作成）
+      await client.query(
+        `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
+        [userId, amount]
+      );
+
+      // 月給支給記録を作成
+      await client.query(
+        'INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) VALUES ($1, $2, $3, $4, $5, $6)',
+        [userId, roleId, amount, currentMonth, paidBy, description || '月給支給']
+      );
+
+      // 取引履歴を記録
+      await client.query(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+        [null, userId, amount, 'salary', description || `月給支給 (${roleId})`]
+      );
+
+      await client.query('COMMIT');
+      return true;
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error in payMonthlySalary:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 月給支給状況確認
+  async checkMonthlySalaryStatus(userId: string, month?: string): Promise<any> {
+    const client = await this.pool.connect();
+    const targetMonth = month || new Date().toISOString().substring(0, 7);
+    
+    try {
+      const result = await client.query(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
+        [userId, targetMonth]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error in checkMonthlySalaryStatus:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 月給履歴取得
+  async getMonthlySalaryHistory(userId: string, limit: number = 12): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = $1 ORDER BY claim_month DESC LIMIT $2',
+        [userId, limit]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getMonthlySalaryHistory:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 接続終了
   async close(): Promise<void> {
     await this.pool.end();
