@@ -33,13 +33,27 @@ export class PostgreSQLDatabase {
   private pool: Pool;
 
   constructor() {
+    // DATABASE_URL環境変数のチェック
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL環境変数が設定されていません');
+    }
+
+    console.log('PostgreSQL接続情報:', {
+      url: process.env.DATABASE_URL?.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
+      isProduction: process.env.NODE_ENV === 'production'
+    });
+
     // Railway PostgreSQL接続設定
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     });
 
-    this.initializeTables();
+    // 非同期初期化を実行（エラーハンドリング付き）
+    this.initializeTables().catch(error => {
+      console.error('PostgreSQL初期化エラー:', error);
+      console.error('ボット起動を継続しますが、通貨機能は利用できません');
+    });
   }
 
   private async initializeTables(): Promise<void> {

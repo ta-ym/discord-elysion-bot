@@ -100,11 +100,29 @@ export interface SpecialVCTimeLog {
 
 export class Database {
   private db: sqlite3.Database;
-  private pgDb: PostgreSQLDatabase;
+  private pgDb: PostgreSQLDatabase | null;
+  private usePostgreSQL: boolean = true; // PostgreSQL使用フラグ
 
   constructor() {
+    // 環境変数でPostgreSQL使用を制御
+    const disablePostgreSQL = process.env['DISABLE_POSTGRESQL'] === 'true';
+    this.usePostgreSQL = !disablePostgreSQL && !!process.env['DATABASE_URL'];
+
     // PostgreSQL接続を初期化（通貨関連のデータ用）
-    this.pgDb = new PostgreSQLDatabase();
+    if (this.usePostgreSQL) {
+      try {
+        this.pgDb = new PostgreSQLDatabase();
+        console.log('PostgreSQL通貨システムを初期化中...');
+      } catch (error) {
+        console.error('PostgreSQL初期化に失敗しました:', error);
+        console.error('SQLiteで通貨機能を継続します');
+        this.pgDb = null;
+        this.usePostgreSQL = false;
+      }
+    } else {
+      console.log('PostgreSQLが無効 - SQLiteで通貨機能を使用します');
+      this.pgDb = null;
+    }
     
     // SQLite接続を初期化（VC関連のデータ用）
     // Railway環境ではメモリDBまたはwritableなディレクトリを使用
@@ -142,7 +160,37 @@ export class Database {
   private initializeTables(): void {
     // serializeを使用してテーブル作成を順次実行
     this.db.serialize(() => {
-    // 公開VCテーブル（通貨関連テーブルはPostgreSQLに移行）
+    
+    // PostgreSQLが使用できない場合は、SQLiteに通貨テーブルも作成
+    if (!this.usePostgreSQL) {
+      console.log('PostgreSQL利用不可 - SQLiteに通貨テーブルを作成します');
+      
+      // ユーザーテーブル
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          discord_id TEXT UNIQUE NOT NULL,
+          balance INTEGER DEFAULT 10000,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 取引履歴テーブル
+      this.db.run(`
+        CREATE TABLE IF NOT EXISTS transactions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          from_user_id TEXT,
+          to_user_id TEXT NOT NULL,
+          amount INTEGER NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('transfer', 'admin_give', 'vc_purchase', 'salary', 'voice_reward')),
+          description TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    }
+    
+    // 公開VCテーブル
     this.db.run(`
       CREATE TABLE IF NOT EXISTS public_vcs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,20 +295,70 @@ export class Database {
     }); // serialize終了
   }
 
-  // ユーザー関連メソッド（PostgreSQLに委譲）
+  // ユーザー関連メソッド（PostgreSQLに委譲またはSQLiteフォールバック）
   async getUser(discordId: string): Promise<User | null> {
-    return await this.pgDb.getUser(discordId);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getUser(discordId);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM users WHERE discord_id = ?',
+        [discordId],
+        (err, row: User) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
   }
 
   async createUser(discordId: string): Promise<User> {
-    return await this.pgDb.createUser(discordId);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.createUser(discordId);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO users (discord_id) VALUES (?)',
+        [discordId],
+        function(err) {
+          if (err) reject(err);
+          else {
+            resolve({
+              id: this.lastID,
+              discord_id: discordId,
+              balance: 10000,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          }
+        }
+      );
+    });
   }
 
   async updateUserBalance(discordId: string, newBalance: number): Promise<void> {
-    return await this.pgDb.updateUserBalance(discordId, newBalance);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.updateUserBalance(discordId, newBalance);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE users SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE discord_id = ?',
+        [newBalance, discordId],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
   }
 
-  // 取引履歴関連メソッド（PostgreSQLに委譲）
+  // 取引履歴関連メソッド（PostgreSQLに委譲またはSQLiteフォールバック）
   async addTransaction(
     fromUserId: string | null,
     toUserId: string,
@@ -268,28 +366,77 @@ export class Database {
     type: 'transfer' | 'admin_give' | 'vc_purchase' | 'salary' | 'voice_reward',
     description?: string
   ): Promise<void> {
-    await this.pgDb.createTransaction(fromUserId, toUserId, amount, type, description);
+    if (this.usePostgreSQL && this.pgDb) {
+      await this.pgDb.createTransaction(fromUserId, toUserId, amount, type, description);
+      return;
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES (?, ?, ?, ?, ?)',
+        [fromUserId, toUserId, amount, type, description],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
   }
 
   async getUserTransactions(discordId: string, limit: number = 10): Promise<Transaction[]> {
-    return await this.pgDb.getTransactionHistory(discordId, limit);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getTransactionHistory(discordId, limit);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        `SELECT * FROM transactions 
+         WHERE from_user_id = ? OR to_user_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT ?`,
+        [discordId, discordId, limit],
+        (err, rows: Transaction[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
   }
 
   async getTransactionHistory(discordId: string, limit: number = 10, offset: number = 0): Promise<Transaction[]> {
-    return await this.pgDb.getTransactionHistory(discordId, limit, offset);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getTransactionHistory(discordId, limit, offset);
+    }
+    
+    // SQLiteフォールバック
+    return this.getUserTransactions(discordId, limit);
   }
 
-  // 月給関連メソッド（PostgreSQLに委譲）
+  // 月給関連メソッド（PostgreSQLに委譲またはSQLiteフォールバック）
   async getSalaryConfigs(): Promise<any[]> {
-    return await this.pgDb.getSalaryConfigs();
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getSalaryConfigs();
+    }
+    // SQLiteフォールバック（空配列）
+    return [];
   }
 
   async setSalaryConfig(roleId: string, roleName: string, amount: number): Promise<any> {
-    return await this.pgDb.setSalaryConfig(roleId, roleName, amount);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.setSalaryConfig(roleId, roleName, amount);
+    }
+    // SQLiteフォールバック（何もしない）
+    return null;
   }
 
   async hasSalaryClaim(userId: string, month: string): Promise<boolean> {
-    return await this.pgDb.hasSalaryClaim(userId, month);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.hasSalaryClaim(userId, month);
+    }
+    // SQLiteフォールバック（月給機能なし）
+    return false;
   }
 
   async createSalaryClaim(
@@ -300,11 +447,18 @@ export class Database {
     paidBy: string,
     description?: string
   ): Promise<void> {
-    return await this.pgDb.createSalaryClaim(userId, roleId, amount, month, paidBy, description);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.createSalaryClaim(userId, roleId, amount, month, paidBy, description);
+    }
+    // SQLiteフォールバック（何もしない）
   }
 
   async getSalaryHistory(userId: string): Promise<any[]> {
-    return await this.pgDb.getSalaryHistory(userId);
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getSalaryHistory(userId);
+    }
+    // SQLiteフォールバック（空配列）
+    return [];
   }
 
   // TempVC関連メソッド

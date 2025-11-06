@@ -6,6 +6,7 @@ import { initializeTempVCPanel } from './utils/tempVCManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
 import { initializeSpecialVCTracker } from './utils/specialVCTracker';
+import { systemLogger } from './utils/systemLogger';
 
 import * as dotenv from 'dotenv';
 import path from 'path';
@@ -111,6 +112,15 @@ class ElysionBot {
       this.client.once(Events.ClientReady, async () => {
         console.log('Bot is ready!');
         
+        // システムロガーを初期化
+        systemLogger.setClient(this.client);
+        
+        // コンソールログインターセプトを有効化
+        if (process.env['SYSTEM_LOG_CHANNEL_ID']) {
+          systemLogger.interceptConsole();
+          await systemLogger.sendStartupLog();
+        }
+        
         // 一時VC管理システムを初期化
         this.tempVCManager = new TempVCManager(this.client);
         console.log('TempVC manager initialized');
@@ -144,14 +154,16 @@ class ElysionBot {
 const bot = new ElysionBot();
 
 // グレースフルシャットダウン
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('Bot is shutting down...');
+  await systemLogger.sendShutdownLog();
   bot.client.destroy();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('Bot is shutting down...');
+  await systemLogger.sendShutdownLog();
   bot.client.destroy();
   process.exit(0);
 });
@@ -204,6 +216,11 @@ bot.client.on(Events.InteractionCreate, async interaction => {
       await command.execute(interaction);
     } catch (error) {
       console.error('Error executing command:', error);
+      
+      // システムロガーにもエラーを送信
+      if (error instanceof Error) {
+        await systemLogger.sendErrorLog(error, `Command: ${interaction.commandName}`);
+      }
       
       const errorMessage = { content: 'There was an error while executing this command!', ephemeral: true };
       
