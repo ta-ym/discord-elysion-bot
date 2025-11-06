@@ -602,6 +602,11 @@ export class Database {
 
   // 管理者による支給（残高チェック不要）
   async adminGiveMoney(adminId: string, toId: string, amount: number, description: string): Promise<void> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.adminGiveMoney(adminId, toId, amount, description);
+    }
+    
+    // SQLiteフォールバック
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
         this.db.run('BEGIN TRANSACTION');

@@ -411,6 +411,37 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 管理者による支給（管理者ID付き）
+  async adminGiveMoney(adminId: string, toId: string, amount: number, description: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+      await client.query(
+        `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
+        [toId, amount]
+      );
+
+      // 取引履歴を記録（管理者IDを記録）
+      await client.query(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+        [adminId, toId, amount, 'admin_give', description]
+      );
+
+      await client.query('COMMIT');
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error in adminGiveMoney:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 月給支給メソッド
   async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
     const client = await this.pool.connect();
