@@ -531,10 +531,13 @@ export class Database {
 
   // トランザクション処理
   async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
+    console.log(`[DATABASE] transferMoney called: usePostgreSQL=${this.usePostgreSQL}, pgDb=${!!this.pgDb}`);
     if (this.usePostgreSQL && this.pgDb) {
+      console.log(`[DATABASE] Using PostgreSQL for transferMoney`);
       return await this.pgDb.transferMoney(fromId, toId, amount, description);
     }
     
+    console.log(`[DATABASE] Using SQLite fallback for transferMoney`);
     // SQLiteフォールバック
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {

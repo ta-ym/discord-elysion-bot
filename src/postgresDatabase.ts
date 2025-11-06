@@ -335,6 +335,7 @@ export class PostgreSQLDatabase {
   async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
     const client = await this.pool.connect();
     try {
+      console.log(`[POSTGRES] Starting transferMoney: ${fromId} -> ${toId}, amount: ${amount}`);
       await client.query('BEGIN');
 
       // 送金者の残高チェック
@@ -342,33 +343,40 @@ export class PostgreSQLDatabase {
         'SELECT balance FROM users WHERE discord_id = $1',
         [fromId]
       );
+      
+      console.log(`[POSTGRES] Sender query result:`, senderResult.rows);
 
       if (senderResult.rows.length === 0 || senderResult.rows[0].balance < amount) {
+        console.log(`[POSTGRES] Transfer failed: insufficient balance or user not found`);
         await client.query('ROLLBACK');
         return false;
       }
 
       // 送金者の残高を減額
-      await client.query(
+      const updateSender = await client.query(
         'UPDATE users SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
         [amount, fromId]
       );
+      console.log(`[POSTGRES] Sender balance updated, affected rows:`, updateSender.rowCount);
 
       // 受取人の残高を増額（ユーザーが存在しない場合は作成）
-      await client.query(
+      const updateReceiver = await client.query(
         `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
          ON CONFLICT(discord_id) DO UPDATE SET 
          balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
         [toId, amount]
       );
+      console.log(`[POSTGRES] Receiver balance updated, affected rows:`, updateReceiver.rowCount);
 
       // 取引履歴を記録
-      await client.query(
+      const insertTransaction = await client.query(
         'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
         [fromId, toId, amount, 'transfer', description]
       );
+      console.log(`[POSTGRES] Transaction recorded, affected rows:`, insertTransaction.rowCount);
 
       await client.query('COMMIT');
+      console.log(`[POSTGRES] Transfer completed successfully`);
       return true;
 
     } catch (error) {
