@@ -331,6 +331,55 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 送金処理
+  async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 送金者の残高チェック
+      const senderResult = await client.query(
+        'SELECT balance FROM users WHERE discord_id = $1',
+        [fromId]
+      );
+
+      if (senderResult.rows.length === 0 || senderResult.rows[0].balance < amount) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      // 送金者の残高を減額
+      await client.query(
+        'UPDATE users SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
+        [amount, fromId]
+      );
+
+      // 受取人の残高を増額（ユーザーが存在しない場合は作成）
+      await client.query(
+        `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = users.balance + $2, updated_at = CURRENT_TIMESTAMP`,
+        [toId, amount]
+      );
+
+      // 取引履歴を記録
+      await client.query(
+        'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+        [fromId, toId, amount, 'transfer', description]
+      );
+
+      await client.query('COMMIT');
+      return true;
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error in transferMoney:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 接続終了
   async close(): Promise<void> {
     await this.pool.end();

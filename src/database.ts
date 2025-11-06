@@ -531,6 +531,11 @@ export class Database {
 
   // トランザクション処理
   async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.transferMoney(fromId, toId, amount, description);
+    }
+    
+    // SQLiteフォールバック
     return new Promise((resolve, reject) => {
       this.db.serialize(() => {
         this.db.run('BEGIN TRANSACTION');
@@ -578,10 +583,11 @@ export class Database {
                         if (err) {
                           this.db.run('ROLLBACK');
                           reject(err);
-                        } else {
-                          this.db.run('COMMIT');
-                          resolve(true);
+                          return;
                         }
+
+                        this.db.run('COMMIT');
+                        resolve(true);
                       }
                     );
                   }
