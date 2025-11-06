@@ -142,9 +142,10 @@ export class ProfileSearcher {
   /**
    * プロフィール情報を含むエンベッドを作成する
    * @param message プロフィールメッセージ
+   * @param userId ユーザーID（削除時の特定用）
    * @returns エンベッドオブジェクト
    */
-  createProfileEmbed(message: Message): EmbedBuilder {
+  createProfileEmbed(message: Message, userId?: string): EmbedBuilder {
     const embed = new EmbedBuilder()
       .setTitle('📋 プロフィール')
       .setDescription(message.content || '自己紹介メッセージ')
@@ -160,6 +161,15 @@ export class ProfileSearcher {
         inline: false
       });
 
+    // ユーザーIDを隠しフィールドとして追加（削除時の特定用）
+    if (userId) {
+      embed.addFields({
+        name: '\u200b', // 不可視文字
+        value: `<!-- USER_ID:${userId} -->`,
+        inline: false
+      });
+    }
+
     // 添付ファイルがある場合は最初の画像を表示
     if (message.attachments.size > 0) {
       const attachment = message.attachments.first();
@@ -169,6 +179,83 @@ export class ProfileSearcher {
     }
 
     return embed;
+  }
+
+  /**
+   * 指定されたチャンネルで特定ユーザーの古いプロフィール投稿を削除する
+   * @param textChannel テキストチャンネル
+   * @param userId ユーザーID
+   * @returns 削除したメッセージ数
+   */
+  private async deleteOldProfilePosts(textChannel: any, userId: string): Promise<number> {
+    try {
+      console.log(`[PROFILE] Searching for old profile posts by user ${userId} in channel ${textChannel.name}`);
+      
+      let deletedCount = 0;
+      let messages = await textChannel.messages.fetch({ limit: 100 });
+      
+      // 最大500件のメッセージを確認（5回に分けて取得）
+      for (let i = 0; i < 5; i++) {
+        if (messages.size === 0) break;
+        
+        // Botによる投稿でプロフィール関連のエンベッドを持つメッセージを検索
+        const oldProfilePosts = messages.filter((message: Message) => {
+          // Botによる投稿かチェック
+          if (message.author.id !== this.client.user?.id) return false;
+          
+          // エンベッドを持つかチェック
+          if (message.embeds.length === 0) return false;
+          
+          // プロフィール関連のエンベッドかチェック
+          const embed = message.embeds[0];
+          if (!embed.title?.includes('プロフィール') && !embed.title?.includes('📋')) return false;
+          
+          // エンベッドの説明文またはフィールドにユーザーIDが含まれているかチェック
+          const embedContent = embed.description || '';
+          const fieldContent = embed.fields?.map(f => f.value).join(' ') || '';
+          const allContent = embedContent + ' ' + fieldContent;
+          
+          // ユーザーIDまたはメンション形式での確認（隠しフィールドも含む）
+          return allContent.includes(userId) || 
+                 allContent.includes(`<@${userId}>`) || 
+                 allContent.includes(`USER_ID:${userId}`);
+        });
+        
+        // 見つかった古い投稿を削除
+        for (const message of oldProfilePosts.values()) {
+          try {
+            await message.delete();
+            deletedCount++;
+            console.log(`[PROFILE] Deleted old profile post (ID: ${message.id}) for user ${userId}`);
+          } catch (deleteError) {
+            console.error(`[PROFILE] Failed to delete old profile post (ID: ${message.id}):`, deleteError);
+          }
+        }
+        
+        // さらに古いメッセージを取得
+        if (i < 4) {
+          const lastMessageId = messages.last()?.id;
+          if (!lastMessageId) break;
+          
+          const olderMessages = await textChannel.messages.fetch({ 
+            limit: 100, 
+            before: lastMessageId 
+          });
+          
+          if (olderMessages.size === 0) break;
+          messages = olderMessages;
+        }
+      }
+      
+      if (deletedCount > 0) {
+        console.log(`[PROFILE] Deleted ${deletedCount} old profile posts for user ${userId}`);
+      }
+      
+      return deletedCount;
+    } catch (error) {
+      console.error(`[PROFILE] Error deleting old profile posts for user ${userId}:`, error);
+      return 0;
+    }
   }
 
   /**
@@ -362,7 +449,7 @@ export class ProfileSearcher {
       }
 
       // プロフィールエンベッドを作成
-      const embed = this.createProfileEmbed(profileMessage);
+      const embed = this.createProfileEmbed(profileMessage, userId);
       
       // 参加者情報を追加
       embed.addFields({
@@ -370,6 +457,12 @@ export class ProfileSearcher {
         value: vcChannel.name,
         inline: true
       });
+      
+      // 古いプロフィール投稿を削除
+      const deletedCount = await this.deleteOldProfilePosts(textChannel, userId);
+      if (deletedCount > 0) {
+        console.log(`[PROFILE] Removed ${deletedCount} old profile posts before posting new one`);
+      }
       
       // テキストチャンネルに投稿
       await textChannel.send({ embeds: [embed] });
