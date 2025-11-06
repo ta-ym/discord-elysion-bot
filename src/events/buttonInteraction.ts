@@ -175,6 +175,12 @@ const buttonInteractionEvent: Event = {
       if (interaction.customId.startsWith('pay_confirm_')) {
         console.log(`[PAY] Processing pay confirmation by ${interaction.user.tag}`);
         
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[PAY] Interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
         const parts = interaction.customId.split('_');
         if (parts.length !== 5) { // pay_confirm_{userId}_{amount}_{timestamp}
           await interaction.reply({
@@ -196,14 +202,18 @@ const buttonInteractionEvent: Event = {
         }
 
         try {
+          // インタラクションを即座にdefer
+          await interaction.deferUpdate();
+          
           // DatabaseインスタンスとPayment処理をインポート
           const { globalDatabase } = await import('../index');
           
           const targetUser = await interaction.client.users.fetch(targetUserId);
           if (!targetUser) {
-            await interaction.reply({
+            await interaction.editReply({
               content: '❌ 対象ユーザーが見つかりません。',
-              ephemeral: true
+              embeds: [],
+              components: []
             });
             return;
           }
@@ -218,7 +228,7 @@ const buttonInteractionEvent: Event = {
           );
 
           // 成功メッセージ
-          await interaction.update({
+          await interaction.editReply({
             content: `✅ **支払い完了**\n\n👤 **対象:** ${targetUser.displayName}\n💰 **金額:** ${amount.toLocaleString()} Ru\n👨‍💼 **支払い者:** ${interaction.user.displayName}`,
             embeds: [],
             components: []
@@ -228,17 +238,35 @@ const buttonInteractionEvent: Event = {
           return;
         } catch (error) {
           console.error('[PAY] Payment execution error:', error);
-          await interaction.update({
-            content: '❌ 支払い処理中にエラーが発生しました。',
-            embeds: [],
-            components: []
-          });
+          
+          try {
+            if (interaction.deferred) {
+              await interaction.editReply({
+                content: '❌ 支払い処理中にエラーが発生しました。',
+                embeds: [],
+                components: []
+              });
+            } else {
+              await interaction.reply({
+                content: '❌ 支払い処理中にエラーが発生しました。',
+                ephemeral: true
+              });
+            }
+          } catch (replyError) {
+            console.error('[PAY] Failed to send error reply:', replyError);
+          }
           return;
         }
       }
 
       // Pay コマンドキャンセルボタン処理
       if (interaction.customId === 'pay_cancel') {
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[PAY] Cancel interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
         await interaction.update({
           content: '❌ 支払いをキャンセルしました。',
           embeds: [],
@@ -259,16 +287,16 @@ const buttonInteractionEvent: Event = {
       });
       
       try {
-        if (!interaction.replied && !interaction.deferred) {
-          await interaction.reply({
-            content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。',
-            ephemeral: true
-          });
-        } else if (interaction.deferred) {
-          await interaction.editReply({
-            content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。'
-          });
+        // インタラクションが既に処理されている場合はスキップ
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[BUTTON] Interaction already processed, skipping error reply`);
+          return;
         }
+        
+        await interaction.reply({
+          content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。',
+          ephemeral: true
+        });
       } catch (replyError) {
         console.error('[BUTTON] Failed to send error reply:', replyError);
       }
