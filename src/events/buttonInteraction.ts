@@ -537,10 +537,13 @@ const buttonInteractionEvent: Event = {
               .setTitle(`✅ 支給成功 (${successResults.length}件)`)
               .setDescription(
                 successResults
-                  .slice(0, 25) // Discord の field 制限により最大25件
-                  .map((r: BulkSalaryResult) => `👤 <@${r.user_id}> - ${r.amount?.toLocaleString()} Ru`)
+                  .slice(0, 20) // Discord の field 制限により最大20件（詳細情報のため少なめ）
+                  .map((r: BulkSalaryResult) => {
+                    const breakdownInfo = r.reason ? ` (内訳: ${r.reason})` : '';
+                    return `👤 <@${r.user_id}> - **${r.amount?.toLocaleString()} Ru**${breakdownInfo}`;
+                  })
                   .join('\n') + 
-                (successResults.length > 25 ? `\n\n... および他 ${successResults.length - 25} 件` : '')
+                (successResults.length > 20 ? `\n\n... および他 ${successResults.length - 20} 件` : '')
               );
             embeds.push(successEmbed);
           }
@@ -583,6 +586,124 @@ const buttonInteractionEvent: Event = {
           console.error('[SALARY-BULK] Error retrieving bulk salary details:', error);
           await interaction.editReply({
             content: '❌ 詳細結果の取得中にエラーが発生しました。'
+          });
+        }
+        return;
+      }
+
+      // Salary Bulk Summary 表示ボタン処理
+      if (interaction.customId === 'salary_bulk_summary') {
+        console.log(`[SALARY-BULK] Processing bulk salary summary request by ${interaction.user.tag}`);
+        
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-BULK] Summary interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        try {
+          await interaction.deferReply({ ephemeral: true });
+          
+          // データベースから最新の一斉給与結果を取得
+          const { globalDatabase } = await import('../index');
+          const bulkResults: BulkSalaryResult[] = await globalDatabase.getLatestBulkSalaryResults(interaction.user.id);
+          
+          if (!bulkResults || bulkResults.length === 0) {
+            await interaction.editReply({
+              content: '❌ 計算サマリー情報が見つかりませんでした。結果は実行から1時間で自動削除されます。'
+            });
+            return;
+          }
+
+          // 成功結果のみを分析
+          const successResults = bulkResults.filter((r: BulkSalaryResult) => r.status === 'success');
+          
+          if (successResults.length === 0) {
+            await interaction.editReply({
+              content: '❌ 成功した給与支給がないため、計算サマリーを表示できません。'
+            });
+            return;
+          }
+
+          // 給与額別の分析
+          const salaryDistribution = new Map<number, number>();
+          const roleAnalysis = new Map<string, { count: number; totalAmount: number }>();
+          let totalPaid = 0;
+          let maxSalary = 0;
+          let minSalary = Number.MAX_VALUE;
+
+          successResults.forEach((result: BulkSalaryResult) => {
+            const amount = result.amount || 0;
+            totalPaid += amount;
+            maxSalary = Math.max(maxSalary, amount);
+            minSalary = Math.min(minSalary, amount);
+            
+            // 給与額の分布
+            salaryDistribution.set(amount, (salaryDistribution.get(amount) || 0) + 1);
+
+            // ロール分析（reason から解析）
+            if (result.reason && result.reason.includes('ロール:')) {
+              const roleInfo = result.reason.split('ロール: ')[1];
+              if (roleInfo) {
+                const roles = roleInfo.split(', ');
+                roles.forEach(roleStr => {
+                  const roleName = roleStr.split('(')[0];
+                  if (!roleAnalysis.has(roleName)) {
+                    roleAnalysis.set(roleName, { count: 0, totalAmount: 0 });
+                  }
+                  const analysis = roleAnalysis.get(roleName)!;
+                  analysis.count += 1;
+                  analysis.totalAmount += amount;
+                });
+              }
+            }
+          });
+
+          const averageSalary = Math.round(totalPaid / successResults.length);
+
+          // 給与分布の上位5種類
+          const topSalaries = Array.from(salaryDistribution.entries())
+            .sort(([,countA], [,countB]) => countB - countA)
+            .slice(0, 5)
+            .map(([amount, count]) => `${amount.toLocaleString()}Ru × ${count}人`)
+            .join('\n');
+
+          // ロール分析の上位5ロール
+          const topRoles = Array.from(roleAnalysis.entries())
+            .sort(([,a], [,b]) => b.count - a.count)
+            .slice(0, 5)
+            .map(([role, data]) => `${role} × ${data.count}人`)
+            .join('\n');
+
+          const summaryEmbed = new EmbedBuilder()
+            .setColor('#0099ff')
+            .setTitle('🔍 給与計算サマリー')
+            .addFields(
+              { name: '📊 基本統計', value: 
+                `支給成功: **${successResults.length}人**\n` +
+                `総支給額: **${totalPaid.toLocaleString()} Ru**\n` +
+                `平均給与: **${averageSalary.toLocaleString()} Ru**`, inline: true },
+              { name: '💰 給与範囲', value: 
+                `最高額: **${maxSalary.toLocaleString()} Ru**\n` +
+                `最低額: **${minSalary.toLocaleString()} Ru**\n` +
+                `差額: **${(maxSalary - minSalary).toLocaleString()} Ru**`, inline: true },
+              { name: '📈 給与分布 (上位5種)', value: topSalaries || 'データなし', inline: false },
+              { name: '🏷️ ロール分析 (上位5ロール)', value: topRoles || 'データなし', inline: false },
+              { name: '⚠️ 注意', value: 
+                '複数ロールを持つユーザーは合算給与が支給されています。\n' +
+                '給与計算に疑問がある場合は、個別にDMで詳細をご確認ください。', inline: false }
+            )
+            .setFooter({ text: '給与システムの透明性を保つため、定期的にサマリーをご確認ください' })
+            .setTimestamp();
+
+          await interaction.editReply({
+            embeds: [summaryEmbed]
+          });
+
+        } catch (error) {
+          console.error('[SALARY-BULK] Error retrieving bulk salary summary:', error);
+          await interaction.editReply({
+            content: '❌ 計算サマリーの取得中にエラーが発生しました。'
           });
         }
         return;

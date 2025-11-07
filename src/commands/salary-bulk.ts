@@ -1,9 +1,56 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, User } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
-import { getActiveSalaryRoles, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
+import { getActiveSalaryRoles, getRoleDisplayName, getTotalSalaryByRoleIds, SalaryRoleConfig } from '../config/salaryRoles';
 import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
 import { getCurrencyLogger } from '../utils/currencyLogger';
+
+// 給与内訳をDMで送信する関数
+async function sendSalaryBreakdownDM(user: User, salaryInfo: { totalSalary: number; roles: SalaryRoleConfig[]; primaryRole: SalaryRoleConfig | null }, targetMonth: string): Promise<void> {
+  try {
+    // DM送信可能かチェック
+    const dmChannel = await user.createDM();
+    
+    // 計算式を明確に表示
+    const calculationFormula = salaryInfo.roles.length > 1 ? 
+      `${salaryInfo.roles.map(r => r.monthlySalary.toLocaleString()).join(' + ')} = ${salaryInfo.totalSalary.toLocaleString()} Ru` :
+      `${salaryInfo.totalSalary.toLocaleString()} Ru`;
+
+    const breakdownEmbed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('💰 月給支給のお知らせ')
+      .setDescription(`**${targetMonth}** の月給が支給されました！`)
+      .addFields(
+        { name: '💵 支給総額', value: `**${salaryInfo.totalSalary.toLocaleString()} Ru**`, inline: false },
+        { name: '🧮 計算式', value: `\`${calculationFormula}\``, inline: false },
+        { name: '📊 給与内訳', value: 
+          salaryInfo.roles.map((role, index) => 
+            `${index + 1}. **${role.roleName || role.roleId}**: ${role.monthlySalary.toLocaleString()} Ru`
+          ).join('\n'), inline: false },
+        { name: '🏆 メインロール', value: salaryInfo.primaryRole?.roleName || 'なし', inline: true },
+        { name: '🔢 適用ロール数', value: `${salaryInfo.roles.length}個`, inline: true },
+        { name: '📅 支給月', value: targetMonth, inline: true }
+      )
+      .setFooter({ text: '給与計算についてご質問がありましたら管理者にお声かけください' })
+      .setTimestamp();
+
+    // 計算が複雑な場合の注意書きを追加
+    if (salaryInfo.roles.length > 1) {
+      breakdownEmbed.addFields({
+        name: '⚠️ 複数ロール適用',
+        value: `あなたは${salaryInfo.roles.length}個の給与対象ロールを持っているため、全ての給与が合算されて支給されています。`,
+        inline: false
+      });
+    }
+
+    await dmChannel.send({ embeds: [breakdownEmbed] });
+    console.log(`[SALARY-DM] Successfully sent salary breakdown to ${user.username} (${user.id})`);
+    
+  } catch (error) {
+    console.warn(`[SALARY-DM] Failed to send DM to ${user.username} (${user.id}):`, error);
+    // DMに失敗してもエラーを投げない（メイン処理を継続するため）
+  }
+}
 
 const salaryBulkCommand: Command = {
   data: new SlashCommandBuilder()
@@ -133,8 +180,15 @@ const salaryBulkCommand: Command = {
             roleResult.members.push({
               userId: member.user.id,
               username: member.user.username,
+              displayName: member.displayName,
               amount: salaryInfo.totalSalary,
+              salaryBreakdown: salaryInfo.roles, // 給与内訳を保存
               status: 'success'
+            });
+
+            // 個別DM送信（非同期、エラーが発生してもメイン処理は継続）
+            sendSalaryBreakdownDM(member.user, salaryInfo, targetMonth).catch(dmError => {
+              console.warn(`[SALARY-BULK] Failed to send DM to ${member.user.username}:`, dmError);
             });
 
             totalSuccess++;
@@ -153,7 +207,9 @@ const salaryBulkCommand: Command = {
             roleResult.members.push({
               userId: member.user.id,
               username: member.user.username,
+              displayName: member.displayName,
               amount: 0,
+              salaryBreakdown: [], // エラー時は空配列
               status: 'error',
               error: error instanceof Error ? error.message : 'Unknown error'
             });
@@ -213,7 +269,12 @@ const salaryBulkCommand: Command = {
             .setCustomId('salary_bulk_details')
             .setLabel('詳細結果を表示')
             .setStyle(ButtonStyle.Primary)
-            .setEmoji('📊')
+            .setEmoji('📊'),
+          new ButtonBuilder()
+            .setCustomId('salary_bulk_summary')
+            .setLabel('計算サマリー')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🔍')
         );
 
       await interaction.editReply({
@@ -221,11 +282,24 @@ const salaryBulkCommand: Command = {
         components: [detailButton]
       });
 
-      // 詳細結果をデータベースに保存
+      // 詳細結果をデータベースに保存（給与内訳を含む）
       try {
         const { globalDatabase } = await import('../index');
-        await globalDatabase.saveBulkSalaryResults(processResults, interaction.user.id);
-        console.log(`[BULK SALARY] Saved ${processResults.length} results to database`);
+        
+        // processResultsを詳細保存用にフラット化
+        const detailedResults = processResults.flatMap(roleResult => 
+          roleResult.members.map((member: any) => ({
+            userId: member.userId,
+            status: member.status,
+            amount: member.amount,
+            reason: member.status === 'success' ? 
+              `ロール: ${member.salaryBreakdown?.map((r: SalaryRoleConfig) => `${r.roleName}(${r.monthlySalary.toLocaleString()}Ru)`).join(', ')}` :
+              member.error || member.reason
+          }))
+        );
+        
+        await globalDatabase.saveBulkSalaryResults(detailedResults, interaction.user.id);
+        console.log(`[BULK SALARY] Saved ${detailedResults.length} detailed results to database`);
       } catch (saveError) {
         console.error('[BULK SALARY] Failed to save results to database:', saveError);
         // 保存エラーが発生してもコマンド処理は継続
