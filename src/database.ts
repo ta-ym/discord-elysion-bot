@@ -962,7 +962,12 @@ export class Database {
 
   async getMonthlySalaryHistory(userId: string, limit: number = 12): Promise<MonthlySalaryClaim[]> {
     if (this.usePostgreSQL && this.pgDb) {
-      return await this.pgDb.getMonthlySalaryHistory(userId, limit);
+      try {
+        return await this.pgDb.getMonthlySalaryHistory(userId, limit);
+      } catch (error) {
+        console.error('PostgreSQL getMonthlySalaryHistory failed, falling back to SQLite:', error);
+        // PostgreSQL失敗時はSQLiteにフォールバック
+      }
     }
     
     // SQLiteフォールバック

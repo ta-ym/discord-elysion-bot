@@ -40,7 +40,17 @@ const salaryHistoryCommand: Command = {
       const displayUser = targetUser || interaction.user;
 
       // 月給履歴を取得
-      const salaryHistory = await database.getMonthlySalaryHistory(userId, limit);
+      let salaryHistory;
+      try {
+        salaryHistory = await database.getMonthlySalaryHistory(userId, limit);
+      } catch (dbError) {
+        console.error('Database connection error in salary-history:', dbError);
+        await interaction.reply({
+          content: '❌ データベース接続エラーが発生しました。PostgreSQL接続を確認してください。\n管理者にお問い合わせください。',
+          ephemeral: true
+        });
+        return;
+      }
 
       if (salaryHistory.length === 0) {
         const message = targetUser 
