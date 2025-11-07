@@ -119,7 +119,7 @@ export class Database {
         
         console.log('PostgreSQL接続情報: {');
         console.log(`  url: '${dbUrl.replace(/\/\/[^:]+:[^@]+@/, '//****:****@')}',`);
-        console.log(`  isProduction: ${process.env.NODE_ENV === 'production'}`);
+        console.log(`  isProduction: ${process.env['NODE_ENV'] === 'production'}`);
         console.log('}');
         console.log('PostgreSQL通貨システムを初期化中...');
         
@@ -142,7 +142,7 @@ export class Database {
     
     // SQLite接続を初期化（VC関連のデータ用）
     // Railway環境ではメモリDBまたはwritableなディレクトリを使用
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction = process.env['NODE_ENV'] === 'production';
     let dbPath: string;
     
     if (isProduction) {

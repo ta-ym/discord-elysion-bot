@@ -34,19 +34,19 @@ export class PostgreSQLDatabase {
 
   constructor() {
     // DATABASE_URL環境変数のチェック
-    if (!process.env.DATABASE_URL) {
+    if (!process.env['DATABASE_URL']) {
       throw new Error('DATABASE_URL環境変数が設定されていません');
     }
 
     console.log('PostgreSQL接続情報:', {
-      url: process.env.DATABASE_URL?.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
-      isProduction: process.env.NODE_ENV === 'production'
+      url: process.env['DATABASE_URL']?.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
+      isProduction: process.env['NODE_ENV'] === 'production'
     });
 
     // Railway PostgreSQL接続設定
     this.pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      connectionString: process.env['DATABASE_URL'],
+      ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
     });
 
     // 非同期初期化を実行（エラーハンドリング付き）

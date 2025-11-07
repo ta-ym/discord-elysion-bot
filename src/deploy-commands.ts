@@ -5,31 +5,30 @@ import path from 'path';
 
 dotenv.config();
 
-const commands: any[] = [];
-
-// コマンドディレクトリからコマンドを読み込み
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-
-for (const file of commandFiles) {
-  const filePath = path.join(commandsPath, file);
-  const command = require(filePath);
-  
-  // module.exportsの場合とdefault exportの場合に対応
-  const commandModule = command.default || command;
-  
-  if (commandModule && 'data' in commandModule && 'execute' in commandModule) {
-    commands.push(commandModule.data.toJSON());
-    console.log(`[INFO] Loaded command: ${commandModule.data.name}`);
-  } else {
-    console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
-  }
-}
-
 // Discord APIにコマンドを登録
 const rest = new REST().setToken(process.env['DISCORD_TOKEN']!);
 
 (async () => {
+  const commands: any[] = [];
+
+  // コマンドディレクトリからコマンドを読み込み
+  const commandsPath = path.join(__dirname, 'commands');
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js') || file.endsWith('.ts'));
+
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    const command = await import(filePath);
+    
+    // module.exportsの場合とdefault exportの場合に対応
+    const commandModule = command.default || command;
+    
+    if (commandModule && 'data' in commandModule && 'execute' in commandModule) {
+      commands.push(commandModule.data.toJSON());
+      console.log(`[INFO] Loaded command: ${commandModule.data.name}`);
+    } else {
+      console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+    }
+  }
   try {
     console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
