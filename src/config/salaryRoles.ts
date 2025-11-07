@@ -16,224 +16,173 @@ export interface SalaryRoleConfig {
  * 3. 以下の設定にロールIDと月給額を追加
  */
 export const SALARY_ROLES: SalaryRoleConfig[] = [
-  // サンプル設定（実際のロールIDに置き換えてください）
+  // 最高権限ロール（500,000 Ru）
   {
     roleId: '1424768596726251651',         
     roleName: '最高神',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 1000000,
+    description: '最高管理者ロール',
     isActive: true
   },
   {
     roleId: '1428737130271871147',         
     roleName: '女神',
     monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    description: '高級管理者ロール',
     isActive: true
   },
   {
     roleId: '1425862683521191937', 
     roleName: '神徒',
     monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    description: '上級管理者ロール',
     isActive: true
   },
   {
     roleId: '1424764701002170368',         
     roleName: '神官',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 200000,
+    description: '中級管理者ロール',
     isActive: true
   },
   {
     roleId: '1424769583419490394',         
     roleName: '妖精さん',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: '特別ロール',
     isActive: true
   },
   {
     roleId: '1425122228688654367',         
-    roleName: '大天使',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    roleName: '本メンバー',
+    monthlySalary: 50000,
+    description: '高級職員ロール',
     isActive: true
   },
   {
     roleId: '1424766502019797054',         
-    roleName: 'ネフィリム',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    roleName: '仮メンバー',
+    monthlySalary: 10000,
+    description: '上級職員ロール',
     isActive: true
   },
+  // 専門管理者ロール（150,000 - 180,000 Ru）
   {
     roleId: '1425516413354774548',         
-    roleName: '選定管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    roleName: '評価管理者',
+    monthlySalary: 50000,
+    description: '評価システム管理者',
     isActive: true
   },
   {
     roleId: '1425516078536065084',         
     roleName: '聖庫管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
-  {
-    roleId: '1425521423170011287',         
-    roleName: '回廊管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 50000,
+    description: '経済システム管理者',
     isActive: true
   },
   {
     roleId: '1425516209289302197',         
     roleName: '先導管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
-  {
-    roleId: '1430233479064326265',         
-    roleName: '祝印管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 50000,
+    description: 'ガイダンス管理者',
     isActive: true
   },
   {
     roleId: '1428713909174669312',         
     roleName: '天使管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: 'コミュニティ管理者',
     isActive: true
   },
   {
     roleId: '1425869955647275059',         
     roleName: '冥界管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
-  {
-    roleId: '1426934729537753269',         
-    roleName: '秘の扉管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: '特別エリア管理者',
     isActive: true
   },
   {
     roleId: '1425515887435186327',         
     roleName: '遊戯管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: 'ゲーム管理者',
     isActive: true
   },
   {
     roleId: '1425515923455873215',         
     roleName: '賭博管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: 'ギャンブル管理者',
     isActive: true
   },
   {
     roleId: '1425516036278718626',         
     roleName: '庭園管理者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: 'リラクゼーション管理者',
     isActive: true
   },
-  {
-    roleId: '1429383633990455376',         
-    roleName: '先導管理代理',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
+  // 副管理・従者ロール（80,000 - 120,000 Ru）
+  
   {
     roleId: '1429450537312714762',         
     roleName: '回廊従者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 15000,
+    description: 'チャンネル従事者',
     isActive: true
   },
   {
     roleId: '1426591044140794028',         
     roleName: '冥界従者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 15000,
+    description: '特別エリア従事者',
     isActive: true
   },
   {
     roleId: '1429450223637364808',         
     roleName: '天使従者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 15000,
+    description: 'コミュニティ従事者',
     isActive: true
   },
-  {
-    roleId: '1425535260539617500',         
-    roleName: '先導者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
-  {
-    roleId: '1426197289449553942',         
-    roleName: '先導者見習い',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
+  // 選定者階層（30,000 - 70,000 Ru）
   {
     roleId: '1425518162388062282',         
     roleName: '上級選定者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 50000,
+    description: '上級評価職',
     isActive: true
   },
   {
     roleId: '1425518223293419671',         
     roleName: '中級選定者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 30000,
+    description: '中級評価職',
     isActive: true
   },
   {
     roleId: '1425518333050097724',         
     roleName: '下級選定者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 20000,
+    description: '下級評価職',
     isActive: true
   },
   {
     roleId: '1425522944708182128',         
     roleName: '見習い選定者',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 10000,
+    description: '評価職見習い',
     isActive: true
   },
+  // 特別職・サポーター（40,000 - 60,000 Ru）
   {
     roleId: '1424764397842202676',         
     roleName: 'Server Booster',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
+    monthlySalary: 10000,
+    description: 'サーバーサポーター',
     isActive: true
-  },
-  {
-    roleId: '1430596803878981795',         
-    roleName: 'シスター',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
-  {
-    roleId: '1430597622703456389',         
-    roleName: '神父',
-    monthlySalary: 500000,
-    description: '管理者ロール - 最高権限',
-    isActive: true
-  },
+  }
 ];
 
 /**
@@ -301,4 +250,28 @@ export function addSalaryRoleById(roleConfig: SalaryRoleConfig): boolean {
 export function getRoleDisplayName(roleId: string): string {
   const roleConfig = getSalaryByRoleId(roleId);
   return roleConfig?.roleName || roleId;
+}
+
+/**
+ * ユーザーの所持ロールから全給与を合算取得（複数ロール対応）
+ */
+export function getTotalSalaryByRoleIds(userRoleIds: string[]): {
+  totalSalary: number;
+  roles: SalaryRoleConfig[];
+  primaryRole: SalaryRoleConfig | null;
+} {
+  const userSalaryRoles = SALARY_ROLES.filter(salaryRole => 
+    salaryRole.isActive && userRoleIds.includes(salaryRole.roleId)
+  );
+
+  if (userSalaryRoles.length === 0) {
+    return { totalSalary: 0, roles: [], primaryRole: null };
+  }
+
+  const totalSalary = userSalaryRoles.reduce((total, role) => total + role.monthlySalary, 0);
+  const primaryRole = userSalaryRoles.reduce((highest, current) => 
+    current.monthlySalary > highest.monthlySalary ? current : highest
+  );
+
+  return { totalSalary, roles: userSalaryRoles, primaryRole };
 }

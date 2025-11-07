@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
-import { getActiveSalaryRoles, getRoleDisplayName } from '../config/salaryRoles';
+import { getActiveSalaryRoles, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
 import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 
@@ -116,26 +116,21 @@ const salaryBulkCommand: Command = {
               continue;
             }
 
-            // ユーザーの最高給与ロールを取得（複数ロール持ちの場合）
+            // ユーザーの全給与ロールを取得（複数ロール持ちの場合は合算）
             const userRoleIds = member.roles.cache.map(r => r.id);
-            const userSalaryRoles = activeSalaryRoles.filter(sr => 
-              userRoleIds.includes(sr.roleId)
-            );
+            const salaryInfo = getTotalSalaryByRoleIds(userRoleIds);
             
-            if (userSalaryRoles.length === 0) continue;
+            if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) continue;
 
-            // 最高額の給与を選択
-            const highestSalaryRole = userSalaryRoles.reduce((highest, current) => 
-              current.monthlySalary > highest.monthlySalary ? current : highest
-            );
+            const roleNames = salaryInfo.roles.map(role => getRoleDisplayName(role.roleId)).join(', ');
 
-            // 給与を支給（データベースの payMonthlySalary を使用）
+            // 合算給与を支給（データベースの payMonthlySalary を使用）
             const salarySuccess = await database.payMonthlySalary(
               member.user.id,
-              highestSalaryRole.roleId,
-              highestSalaryRole.monthlySalary,
+              salaryInfo.primaryRole.roleId,
+              salaryInfo.totalSalary,
               interaction.user.id,
-              `一斉給与支給 - ${getRoleDisplayName(highestSalaryRole.roleId)}`
+              `一斉給与支給 - 複数ロール合算 [${roleNames}]`
             );
 
             if (!salarySuccess) {
@@ -145,12 +140,12 @@ const salaryBulkCommand: Command = {
             roleResult.members.push({
               userId: member.user.id,
               username: member.user.username,
-              amount: highestSalaryRole.monthlySalary,
+              amount: salaryInfo.totalSalary,
               status: 'success'
             });
 
             totalSuccess++;
-            totalAmount += highestSalaryRole.monthlySalary;
+            totalAmount += salaryInfo.totalSalary;
 
           } catch (error) {
             console.error(`Error processing salary for user ${member.user.id}:`, error);

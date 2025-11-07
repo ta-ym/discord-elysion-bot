@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
-import { getActiveSalaryRoles, getSalaryByRoleId, getHighestSalaryByRoleIds, getRoleDisplayName } from '../config/salaryRoles';
+import { getActiveSalaryRoles, getSalaryByRoleId, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
 import { checkCommandPermission } from '../utils/permissions';
 
 const salaryCommand: Command = {
@@ -98,11 +98,11 @@ const salaryCommand: Command = {
         salaryAmount = roleConfig.monthlySalary;
         displayRoleName = specifiedRole.name;
       } else if (specifiedAmount) {
-        // 金額のみ指定された場合（ロールは自動判定）
+        // 金額のみ指定された場合（複数ロール対応、代表ロール自動判定）
         const userRoleIds = targetMember.roles.cache.map(role => role.id);
-        const matchedRole = getHighestSalaryByRoleIds(userRoleIds);
+        const salaryInfo = getTotalSalaryByRoleIds(userRoleIds);
 
-        if (!matchedRole) {
+        if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) {
           await interaction.reply({
             content: `❌ ユーザーが給与対象ロールを持っていません。\n利用可能なロール: ${getActiveSalaryRoles().map(r => getRoleDisplayName(r.roleId)).join(', ')}`,
             ephemeral: true
@@ -110,15 +110,17 @@ const salaryCommand: Command = {
           return;
         }
         
-        salaryRoleId = matchedRole.roleId;
+        const roleNames = salaryInfo.roles.map(role => getRoleDisplayName(role.roleId)).join(', ');
+        
+        salaryRoleId = salaryInfo.primaryRole.roleId;
         salaryAmount = specifiedAmount;
-        displayRoleName = getRoleDisplayName(matchedRole.roleId);
+        displayRoleName = `カスタム金額 - 対象ロール [${roleNames}]`;
       } else {
-        // 何も指定されていない場合（自動判定）
+        // 何も指定されていない場合（複数ロール合算自動判定）
         const userRoleIds = targetMember.roles.cache.map(role => role.id);
-        const matchedRole = getHighestSalaryByRoleIds(userRoleIds);
+        const salaryInfo = getTotalSalaryByRoleIds(userRoleIds);
 
-        if (!matchedRole) {
+        if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) {
           await interaction.reply({
             content: `❌ ユーザーが給与対象ロールを持っていません。\n利用可能なロール: ${getActiveSalaryRoles().map(r => getRoleDisplayName(r.roleId)).join(', ')}`,
             ephemeral: true
@@ -126,9 +128,11 @@ const salaryCommand: Command = {
           return;
         }
         
-        salaryRoleId = matchedRole.roleId;
-        salaryAmount = matchedRole.monthlySalary;
-        displayRoleName = getRoleDisplayName(matchedRole.roleId);
+        const roleNames = salaryInfo.roles.map(role => getRoleDisplayName(role.roleId)).join(', ');
+        
+        salaryRoleId = salaryInfo.primaryRole.roleId;
+        salaryAmount = salaryInfo.totalSalary;
+        displayRoleName = `複数ロール合算 [${roleNames}]`;
       }
 
       // 確認画面を表示
