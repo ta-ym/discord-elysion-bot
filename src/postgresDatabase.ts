@@ -549,6 +549,23 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 月給支給記録削除（ロールバック用）
+  async deleteMonthlySalaryClaim(userId: string, month: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'DELETE FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
+        [userId, month]
+      );
+      return (result.rowCount || 0) > 0;
+    } catch (error) {
+      console.error('Error in deleteMonthlySalaryClaim:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 接続終了
   async close(): Promise<void> {
     await this.pool.end();

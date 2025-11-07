@@ -983,6 +983,25 @@ export class Database {
     });
   }
 
+  // 月給支給記録削除（ロールバック用）
+  async deleteMonthlySalaryClaim(userId: string, month: string): Promise<boolean> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.deleteMonthlySalaryClaim(userId, month);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'DELETE FROM monthly_salary_claims WHERE user_id = ? AND claim_month = ?',
+        [userId, month],
+        function(err: any) {
+          if (err) reject(err);
+          else resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
   // 公開VC関連メソッド
   async addPublicVC(channelId: string, creatorId: string, channelName: string, description?: string): Promise<void> {
     return new Promise((resolve, reject) => {

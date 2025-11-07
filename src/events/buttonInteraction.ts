@@ -297,6 +297,100 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // Salary Rollback 確認ボタン処理
+      if (interaction.customId.startsWith('salary_rollback_confirm_')) {
+        console.log(`[SALARY-ROLLBACK] Processing rollback confirmation by ${interaction.user.tag}`);
+        
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-ROLLBACK] Interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        const parts = interaction.customId.split('_');
+        if (parts.length !== 6) { // salary_rollback_confirm_{userId}_{month}_{adminId}
+          await interaction.reply({
+            content: '❌ 無効なロールバック情報です。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        const targetUserId = parts[3];
+        const targetMonth = parts[4];
+        const adminId = parts[5];
+
+        // 権限チェック - 実行者が管理者IDと一致するかチェック
+        if (interaction.user.id !== adminId) {
+          await interaction.reply({
+            content: '❌ この操作を実行する権限がありません。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        try {
+          await interaction.deferUpdate();
+          
+          // ロールバック処理を実行
+          const { executeSalaryRollback } = await import('../commands/salary-rollback');
+          const result = await executeSalaryRollback(targetUserId, targetMonth, adminId);
+          
+          if (result.success) {
+            // 成功時の通知
+            const { getCurrencyLogger } = await import('../utils/currencyLogger');
+            const logger = getCurrencyLogger();
+            if (logger) {
+              const targetUser = await interaction.client.users.fetch(targetUserId);
+              await logger.logTransaction({
+                fromUserId: adminId,
+                toUserId: targetUserId,
+                amount: -(result.amount || 0),
+                type: 'admin_give',
+                description: `月給ロールバック (${targetMonth}) - 対象: ${targetUser.displayName || targetUser.username}`
+              });
+            }
+
+            await interaction.editReply({
+              content: `✅ ${result.message}`,
+              embeds: [],
+              components: []
+            });
+          } else {
+            await interaction.editReply({
+              content: `❌ ${result.message}`,
+              embeds: [],
+              components: []
+            });
+          }
+
+        } catch (error) {
+          console.error('[SALARY-ROLLBACK] Error processing rollback:', error);
+          await interaction.editReply({
+            content: '❌ ロールバック処理中にエラーが発生しました。',
+            embeds: [],
+            components: []
+          });
+        }
+        return;
+      }
+
+      // Salary Rollback キャンセルボタン処理
+      if (interaction.customId.startsWith('salary_rollback_cancel_')) {
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-ROLLBACK] Cancel interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
+        await interaction.update({
+          content: '❌ ロールバックをキャンセルしました。',
+          embeds: [],
+          components: []
+        });
+        return;
+      }
+
     } catch (error) {
       console.error(`[BUTTON] Button interaction error for ${interaction.customId}:`, error);
       console.error(`[BUTTON] Error details:`, {
