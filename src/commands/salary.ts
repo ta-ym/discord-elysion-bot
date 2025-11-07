@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role } from 'discord.js';
 import { Command } from '../types';
-import { Database } from '../database';
 import { getActiveSalaryRoles, getSalaryByRoleId, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
 import { checkCommandPermission } from '../utils/permissions';
 
@@ -38,8 +37,6 @@ const salaryCommand: Command = {
     const description = interaction.options.getString('description');
 
     try {
-      const database = new Database();
-      
       // サーバーメンバー情報を取得
       const targetMember = await interaction.guild?.members.fetch(targetUser.id);
       if (!targetMember) {
@@ -47,23 +44,6 @@ const salaryCommand: Command = {
           content: '❌ 対象ユーザーがサーバーに見つかりません。',
           ephemeral: true
         });
-        return;
-      }
-
-      // 今月の支給状況をチェック
-      const existingSalary = await database.checkMonthlySalaryStatus(targetUser.id);
-      if (existingSalary) {
-        const embed = new EmbedBuilder()
-          .setColor(0xFF6B6B)
-          .setTitle('⚠️ 支給済み')
-          .setDescription(`${targetUser.displayName} には今月既に給与が支給されています。`)
-          .addFields(
-            { name: '支給日', value: new Date(existingSalary.created_at).toLocaleDateString('ja-JP'), inline: true },
-            { name: 'ロール', value: getRoleDisplayName(existingSalary.role_id), inline: true },
-            { name: '金額', value: `${existingSalary.amount.toLocaleString()} Ru`, inline: true }
-          );
-        
-        await interaction.reply({ embeds: [embed], ephemeral: true });
         return;
       }
 

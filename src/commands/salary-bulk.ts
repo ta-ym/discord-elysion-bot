@@ -28,20 +28,20 @@ const salaryBulkCommand: Command = {
       return;
     }
 
+    // 最初にdeferReplyを実行
+    await interaction.deferReply();
+
     try {
       const targetMonth = interaction.options.getString('month') || 
         new Date().toISOString().slice(0, 7); // YYYY-MM
 
       // 月形式のバリデーション
       if (!/^\d{4}-\d{2}$/.test(targetMonth)) {
-        await interaction.reply({
-          content: '❌ 月の形式が正しくありません。YYYY-MM形式で入力してください。（例: 2023-12）',
-          ephemeral: true
+        await interaction.editReply({
+          content: '❌ 月の形式が正しくありません。YYYY-MM形式で入力してください。（例: 2023-12）'
         });
         return;
       }
-
-      await interaction.deferReply();
 
       // アクティブな給与ロール設定を取得
       const activeSalaryRoles = getActiveSalaryRoles();
@@ -102,20 +102,6 @@ const salaryBulkCommand: Command = {
           totalProcessed++;
           
           try {
-            // 既に今月給与を受け取っているかチェック
-            const existingSalary = await database.checkMonthlySalaryStatus(member.user.id, targetMonth);
-            
-            if (existingSalary) {
-              roleResult.members.push({
-                userId: member.user.id,
-                username: member.user.username,
-                amount: 0,
-                status: 'already_paid'
-              });
-              totalSkipped++;
-              continue;
-            }
-
             // ユーザーの全給与ロールを取得（複数ロール持ちの場合は合算）
             const userRoleIds = member.roles.cache.map(r => r.id);
             const salaryInfo = getTotalSalaryByRoleIds(userRoleIds);
@@ -228,9 +214,21 @@ const salaryBulkCommand: Command = {
 
     } catch (error) {
       console.error('Error in salary-bulk command:', error);
-      await interaction.editReply({
-        content: '❌ 一斉給与支給処理中にエラーが発生しました。'
-      });
+      try {
+        // interactionがまだ応答していない場合のみ応答
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: '❌ 一斉給与支給処理中にエラーが発生しました。',
+            ephemeral: true
+          });
+        } else if (interaction.deferred) {
+          await interaction.editReply({
+            content: '❌ 一斉給与支給処理中にエラーが発生しました。'
+          });
+        }
+      } catch (replyError) {
+        console.error('Error responding to interaction:', replyError);
+      }
     }
   },
 };
