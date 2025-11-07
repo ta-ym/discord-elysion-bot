@@ -161,7 +161,34 @@ export async function execute(interaction: CommandInteraction) {
 // 全ユーザー取得のヘルパー関数
 async function getAllUsers(): Promise<any[]> {
   try {
-    // データベースの内部SQLiteインスタンスにアクセス
+    console.log('[BALANCE-RESET-ALL] Attempting to fetch all users...');
+    
+    // PostgreSQLが利用可能かチェック
+    const usePostgreSQL = (database as any).usePostgreSQL;
+    console.log(`[BALANCE-RESET-ALL] Database mode: ${usePostgreSQL ? 'PostgreSQL' : 'SQLite'}`);
+    
+    if (usePostgreSQL) {
+      // PostgreSQLから全ユーザーを取得
+      console.log('[BALANCE-RESET-ALL] Using PostgreSQL to fetch users');
+      const postgresDb = (database as any).postgresql;
+      
+      if (!postgresDb) {
+        console.error('[BALANCE-RESET-ALL] PostgreSQL instance not found');
+        return [];
+      }
+      
+      try {
+        const result = await postgresDb.query('SELECT discord_id, balance FROM users WHERE balance IS NOT NULL');
+        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${result.rows?.length || 0} users`);
+        return result.rows || [];
+      } catch (pgError) {
+        console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
+        console.log('[BALANCE-RESET-ALL] Falling back to SQLite...');
+      }
+    }
+    
+    // SQLiteフォールバック
+    console.log('[BALANCE-RESET-ALL] Using SQLite to fetch users');
     const dbInstance = (database as any).sqlite || (database as any).db;
     
     if (!dbInstance) {
@@ -190,7 +217,7 @@ async function getAllUsers(): Promise<any[]> {
             console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
             reject(err);
           } else {
-            console.log(`[BALANCE-RESET-ALL] Fetched ${rows?.length || 0} users`);
+            console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} users`);
             resolve(rows || []);
           }
         });
