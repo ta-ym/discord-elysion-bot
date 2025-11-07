@@ -480,10 +480,18 @@ export class PostgreSQLDatabase {
         [userId, amount]
       );
 
-      // 月給支給記録を作成
-      console.log(`[PostgreSQL] Creating salary claim record for user ${userId}`);
+      // 月給支給記録を作成（UPSERT: 既存の場合は金額を累積）
+      console.log(`[PostgreSQL] Creating/updating salary claim record for user ${userId}`);
       await client.query(
-        'INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) VALUES ($1, $2, $3, $4, $5, $6)',
+        `INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) 
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (user_id, claim_month) 
+         DO UPDATE SET 
+           role_id = EXCLUDED.role_id,
+           amount = monthly_salary_claims.amount + EXCLUDED.amount,
+           paid_by = EXCLUDED.paid_by,
+           description = EXCLUDED.description,
+           created_at = CURRENT_TIMESTAMP`,
         [userId, roleId, amount, currentMonth, paidBy, description || '月給支給']
       );
 
