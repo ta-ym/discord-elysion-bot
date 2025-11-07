@@ -61,9 +61,12 @@ class ElysionBot {
       const filePath = path.join(commandsPath, file);
       const command = await import(filePath);
       
-      if ('data' in command.default && 'execute' in command.default) {
-        this.commands.set(command.default.data.name, command.default);
-        console.log(`[INFO] Command loaded: ${command.default.data.name}`);
+      // module.exportsの場合とdefault exportの場合に対応
+      const commandModule = command.default || command;
+      
+      if (commandModule && 'data' in commandModule && 'execute' in commandModule) {
+        this.commands.set(commandModule.data.name, commandModule);
+        console.log(`[INFO] Command loaded: ${commandModule.data.name}`);
       } else {
         console.log(
           `[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`
