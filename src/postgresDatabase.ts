@@ -43,18 +43,21 @@ export class PostgreSQLDatabase {
       isProduction: process.env['NODE_ENV'] === 'production'
     });
 
-    // Railway PostgreSQL接続設定
+    // Railway PostgreSQL接続設定（短いタイムアウト）
     this.pool = new Pool({
       connectionString: process.env['DATABASE_URL'],
       ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
-      // 接続タイムアウト設定
-      connectionTimeoutMillis: 10000, // 10秒でタイムアウト
-      idleTimeoutMillis: 30000, // 30秒でアイドル接続を終了
-      max: 10, // 最大接続数
+      // 短い接続タイムアウト設定
+      connectionTimeoutMillis: 3000, // 3秒でタイムアウト（短縮）
+      idleTimeoutMillis: 10000, // 10秒でアイドル接続を終了
+      max: 5, // 最大接続数を削減
       // クエリタイムアウト設定
-      query_timeout: 10000, // 10秒でクエリタイムアウト
-      // 接続リトライ設定
-      application_name: 'elysion-bot'
+      query_timeout: 5000, // 5秒でクエリタイムアウト（短縮）
+      // 接続設定
+      application_name: 'elysion-bot',
+      // Railway環境での接続設定
+      statement_timeout: 5000, // ステートメントタイムアウト
+      idle_in_transaction_session_timeout: 5000 // トランザクション内アイドルタイムアウト
     });
 
     // 非同期初期化を実行（リトライ機能付き）
@@ -67,19 +70,37 @@ export class PostgreSQLDatabase {
   private async initializeWithRetry(maxRetries: number): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries}`);
-        await this.initializeTables();
+        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 5秒)`);
+        
+        // タイムアウト付きで初期化を実行
+        await Promise.race([
+          this.initializeTables(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Initialization timeout after 5 seconds')), 5000)
+          )
+        ]);
+        
         console.log('PostgreSQL初期化成功');
         return;
       } catch (error) {
         console.error(`PostgreSQL初期化試行 ${attempt} 失敗:`, error);
         
+        // 接続タイムアウトや予期される接続エラーの場合、早期に諦める
+        if (error instanceof Error && (
+          error.message.includes('timeout') ||
+          error.message.includes('ETIMEDOUT') ||
+          error.message.includes('Connection terminated')
+        )) {
+          console.log('接続タイムアウトエラーのため、これ以上のリトライをスキップします');
+          throw error;
+        }
+        
         if (attempt === maxRetries) {
           throw error; // 最後の試行で失敗した場合は例外を投げる
         }
         
-        // 指数バックオフで待機（2秒、4秒、8秒...）
-        const waitTime = Math.pow(2, attempt) * 1000;
+        // より短い待機時間（1秒、2秒のみ）
+        const waitTime = attempt * 1000;
         console.log(`${waitTime}ms待機してリトライします...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }

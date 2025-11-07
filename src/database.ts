@@ -125,7 +125,7 @@ export class Database {
         
         this.pgDb = new PostgreSQLDatabase();
         
-        // PostgreSQL接続の健全性チェックを遅延実行
+        // PostgreSQL接続の健全性チェックを早期実行
         setTimeout(async () => {
           try {
             await this.checkPostgreSQLHealth();
@@ -135,7 +135,14 @@ export class Database {
             this.pgDb = null;
             this.usePostgreSQL = false;
           }
-        }, 5000); // 5秒後にチェック
+        }, 3000); // 3秒後にチェック（短縮）
+        
+        // 即座にフォールバック可能状態を準備
+        setTimeout(() => {
+          if (this.usePostgreSQL && this.pgDb) {
+            console.log('PostgreSQL接続確認中... 問題があればSQLiteにフォールバックします');
+          }
+        }, 1000);
         
       } catch (error) {
         console.error('PostgreSQL初期化エラー:', error);
