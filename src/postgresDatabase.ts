@@ -468,20 +468,11 @@ export class PostgreSQLDatabase {
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
     
     try {
+      console.log(`[PostgreSQL] Starting transaction for user ${userId}`);
       await client.query('BEGIN');
 
-      // 今月既に支給済みかチェック
-      const existingClaim = await client.query(
-        'SELECT id FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
-        [userId, currentMonth]
-      );
-
-      if (existingClaim.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return false; // 既に支給済み
-      }
-
       // ユーザーの残高を増額（存在しない場合は作成）
+      console.log(`[PostgreSQL] Updating user balance for ${userId} with amount ${amount}`);
       await client.query(
         `INSERT INTO users (discord_id, balance) VALUES ($1, 10000 + $2)
          ON CONFLICT(discord_id) DO UPDATE SET 
@@ -490,18 +481,22 @@ export class PostgreSQLDatabase {
       );
 
       // 月給支給記録を作成
+      console.log(`[PostgreSQL] Creating salary claim record for user ${userId}`);
       await client.query(
         'INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) VALUES ($1, $2, $3, $4, $5, $6)',
         [userId, roleId, amount, currentMonth, paidBy, description || '月給支給']
       );
 
       // 取引履歴を記録
+      console.log(`[PostgreSQL] Creating transaction record for user ${userId}`);
       await client.query(
         'INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
         [null, userId, amount, 'salary', description || `月給支給 (${roleId})`]
       );
 
+      console.log(`[PostgreSQL] Committing transaction for user ${userId}`);
       await client.query('COMMIT');
+      console.log(`[PostgreSQL] Successfully processed salary for user ${userId}`);
       return true;
 
     } catch (error) {
