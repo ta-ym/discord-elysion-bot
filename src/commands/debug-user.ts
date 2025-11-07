@@ -8,7 +8,11 @@ const debugCommand: Command = {
   
   async execute(interaction: ChatInputCommandInteraction) {
     const user = interaction.user;
-    const member = interaction.member;
+    const member = interaction.member as any;
+    
+    // ユーザーのロール情報を取得
+    const userRoles = member?.roles?.cache?.map((role: any) => `${role.name} (${role.id})`) || [];
+    const rolesList = userRoles.length > 0 ? userRoles.join('\n') : 'ロールなし';
     
     const debugEmbed = new EmbedBuilder()
       .setColor('#00ff00')
@@ -16,10 +20,11 @@ const debugCommand: Command = {
       .addFields(
         { name: 'ユーザーID', value: user.id, inline: true },
         { name: 'ユーザー名', value: user.username, inline: true },
-        { name: 'ディスプレイ名', value: member ? (member as any).displayName || 'N/A' : 'N/A', inline: true },
+        { name: 'ディスプレイ名', value: member?.displayName || 'N/A', inline: true },
         { name: 'タグ', value: user.tag, inline: true },
         { name: 'Bot', value: user.bot ? 'はい' : 'いいえ', inline: true },
-        { name: 'システム', value: user.system ? 'はい' : 'いいえ', inline: true }
+        { name: 'システム', value: user.system ? 'はい' : 'いいえ', inline: true },
+        { name: 'ロール', value: rolesList.length > 1024 ? rolesList.substring(0, 1021) + '...' : rolesList, inline: false }
       )
       .setTimestamp();
 
@@ -28,7 +33,8 @@ const debugCommand: Command = {
       username: user.username,
       tag: user.tag,
       bot: user.bot,
-      system: user.system
+      system: user.system,
+      roles: userRoles
     });
 
     await interaction.reply({ embeds: [debugEmbed], ephemeral: true });

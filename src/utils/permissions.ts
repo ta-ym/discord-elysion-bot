@@ -7,8 +7,8 @@ export const SALARY_AUTHORIZED_ROLES = [
   '1425862683521191937', // 神徒
 ];
 
-// 特権ユーザーのID一覧（全コマンド使用可能）
-export const PRIVILEGED_USERS = [
+// 特権ロールのID一覧（全コマンド使用可能）
+export const PRIVILEGED_ROLES = [
   '1424768596726251651',
   '1428737130271871147', 
   '1425862683521191937'
@@ -46,10 +46,14 @@ export function getSalaryPermissionErrorMessage(): string {
 }
 
 /**
- * ユーザーが特権ユーザーかどうかをチェック
+ * ユーザーが特権ロールを持っているかどうかをチェック
  */
-export function isPrivilegedUser(userId: string): boolean {
-  return PRIVILEGED_USERS.includes(userId);
+export function hasPrivilegedRole(member: GuildMember | null): boolean {
+  if (!member) return false;
+  
+  return member.roles.cache.some(role => 
+    PRIVILEGED_ROLES.includes(role.id)
+  );
 }
 
 /**
@@ -68,12 +72,15 @@ export function isPublicCommand(commandName: string): boolean {
 export async function checkCommandPermission(interaction: CommandInteraction, commandName: string): Promise<boolean> {
   const userId = interaction.user.id;
   const username = interaction.user.username;
+  const member = interaction.member as GuildMember | null;
   
   console.log(`[PERMISSION CHECK] User: ${username} (${userId}) attempting to use command: ${commandName}`);
   
-  // 特権ユーザーは全コマンド使用可能
-  if (isPrivilegedUser(userId)) {
-    console.log(`[PERMISSION CHECK] User ${username} is privileged - access granted`);
+  // 特権ロールを持つユーザーは全コマンド使用可能
+  if (hasPrivilegedRole(member)) {
+    const userRoles = member?.roles.cache.map(role => `${role.name} (${role.id})`).join(', ') || 'None';
+    console.log(`[PERMISSION CHECK] User ${username} has privileged role - access granted`);
+    console.log(`[PERMISSION CHECK] User roles: ${userRoles}`);
     return false; // 権限あり
   }
   
@@ -83,8 +90,10 @@ export async function checkCommandPermission(interaction: CommandInteraction, co
     return false; // 権限あり
   }
   
+  const userRoles = member?.roles.cache.map(role => `${role.name} (${role.id})`).join(', ') || 'None';
   console.log(`[PERMISSION CHECK] Access denied for user ${username} (${userId}) to command ${commandName}`);
-  console.log(`[PERMISSION CHECK] Privileged users: ${PRIVILEGED_USERS.join(', ')}`);
+  console.log(`[PERMISSION CHECK] User roles: ${userRoles}`);
+  console.log(`[PERMISSION CHECK] Required privileged roles: ${PRIVILEGED_ROLES.join(', ')}`);
   console.log(`[PERMISSION CHECK] Public commands: ${PUBLIC_COMMANDS.join(', ')}`);
   
   // 権限なし - エラーメッセージを送信
