@@ -170,7 +170,7 @@ async function getAllUsers(): Promise<any[]> {
     if (usePostgreSQL) {
       // PostgreSQLから全ユーザーを取得
       console.log('[BALANCE-RESET-ALL] Using PostgreSQL to fetch users');
-      const postgresDb = (database as any).postgresql;
+      const postgresDb = (database as any).pgDb;
       
       if (!postgresDb) {
         console.error('[BALANCE-RESET-ALL] PostgreSQL instance not found');
