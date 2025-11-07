@@ -190,7 +190,9 @@ export class SpecialVCTracker {
     angelEvaluationMinutes: number;
     dailyStats: any[];
   }> {
-    const stats = await this.database.getSpecialVCStats(userId, startDate, endDate);
+    const finalStartDate = startDate || '1970-01-01';
+    const finalEndDate = endDate || '2099-12-31';
+    const stats = await this.database.getSpecialVCStats(userId, finalStartDate, finalEndDate);
     
     const totalCorridorMinutes = stats.reduce((sum, stat) => sum + stat.corridor_minutes, 0);
     const totalEvaluationMinutes = stats.reduce((sum, stat) => sum + stat.evaluation_minutes, 0);
@@ -215,7 +217,9 @@ export class SpecialVCTracker {
    * 特別VCランキングを取得
    */
   async getSpecialVCRanking(vcType: 'corridor' | 'evaluation' | 'both' = 'both', startDate?: string, endDate?: string): Promise<any[]> {
-    return await this.database.getSpecialVCRanking(vcType, startDate, endDate);
+    const finalStartDate = startDate || '1970-01-01';
+    const finalEndDate = endDate || '2099-12-31';
+    return await this.database.getSpecialVCRanking(vcType, finalStartDate, finalEndDate);
   }
 
   /**

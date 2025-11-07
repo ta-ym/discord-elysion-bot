@@ -132,7 +132,9 @@ export class VoiceTimeTracker {
     totalSessions: number;
     dailyStats: any[];
   }> {
-    const stats = await this.database.getVoiceTimeStats(userId, startDate, endDate);
+    const finalStartDate = startDate || '1970-01-01';
+    const finalEndDate = endDate || '2099-12-31';
+    const stats = await this.database.getVoiceTimeStats(userId, finalStartDate, finalEndDate);
     
     const totalMinutes = stats.reduce((sum, stat) => sum + stat.total_minutes, 0);
     const angelRoleMinutes = stats.reduce((sum, stat) => sum + stat.angel_role_minutes, 0);
@@ -150,7 +152,9 @@ export class VoiceTimeTracker {
    * 天使ロール全体の通話時間統計を取得
    */
   async getAngelRoleStats(startDate?: string, endDate?: string): Promise<any[]> {
-    return await this.database.getAngelRoleVoiceStats(startDate, endDate);
+    const finalStartDate = startDate || '1970-01-01';
+    const finalEndDate = endDate || '2099-12-31';
+    return await this.database.getAngelRoleVoiceStats(finalStartDate, finalEndDate);
   }
 
   /**
