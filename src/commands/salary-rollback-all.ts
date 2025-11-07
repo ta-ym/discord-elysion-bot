@@ -99,7 +99,7 @@ export async function execute(interaction: CommandInteraction) {
       .addFields(
         { name: '📅 対象月', value: monthToRollback, inline: true },
         { name: '👥 影響ユーザー数', value: `${rollbackableRecords.length}人`, inline: true },
-        { name: '💰 総回収金額', value: `${totalAmount.toLocaleString()}エリクサー`, inline: true },
+        { name: '💰 総回収金額', value: `${totalAmount.toLocaleString()}Ru`, inline: true },
         { name: '⚠️ 重要な注意', value: 
           '• この操作は**全員の月給を一括でロールバック**します\n' +
           '• 各ユーザーの残高から月給分が**差し引かれます**\n' +
@@ -107,7 +107,7 @@ export async function execute(interaction: CommandInteraction) {
           '• この操作は**取り消すことができません**', inline: false },
         { name: '📋 影響を受けるユーザー', value: 
           rollbackableRecords.slice(0, 10).map(record => 
-            `<@${record.user_id}> - ${record.amount.toLocaleString()}エリクサー`
+            `<@${record.user_id}> - ${record.amount.toLocaleString()}Ru`
           ).join('\n') + 
           (rollbackableRecords.length > 10 ? `\n...他${rollbackableRecords.length - 10}人` : ''), 
           inline: false }
@@ -206,7 +206,7 @@ export async function executeSalaryRollbackAll(interaction: any, month: string) 
         successCount++;
         
         // システムログに記録
-        console.log(`[SALARY ROLLBACK ALL] User ${record.user_id}: ${record.amount} エリクサーをロールバック（${currentBalance} → ${newBalance}）`);
+        console.log(`[SALARY ROLLBACK ALL] User ${record.user_id}: ${record.amount} Ruをロールバック（${currentBalance} → ${newBalance}）`);
         
       } catch (error) {
         console.error(`[SALARY ROLLBACK ALL ERROR] User ${record.user_id}:`, error);

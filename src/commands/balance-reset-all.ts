@@ -12,14 +12,14 @@ const database = new Database();
 
 export const data = new SlashCommandBuilder()
   .setName('balance-reset-all')
-  .setDescription('【超危険】全員の残高を10000エリクサーに設定します')
+  .setDescription('【超危険】全員の残高を10000Ruに設定します')
   .addStringOption(option =>
     option.setName('confirmation')
       .setDescription('確認用：この操作を実行するには "RESET_ALL_BALANCES_TO_10000" と入力してください')
       .setRequired(true))
   .addIntegerOption(option =>
     option.setName('amount')
-      .setDescription('設定する残高（デフォルト：10000エリクサー）')
+      .setDescription('設定する残高（デフォルト：10000Ru）')
       .setRequired(false)
       .setMinValue(0)
       .setMaxValue(1000000));
@@ -94,17 +94,17 @@ export async function execute(interaction: CommandInteraction) {
       .setTitle('🚨 【超危険な操作】全員残高リセット確認')
       .setDescription(`**この操作は極めて危険です。全てのユーザーの残高が変更されます。**`)
       .addFields(
-        { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}エリクサー`, inline: true },
+        { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}Ru`, inline: true },
         { name: '👥 対象ユーザー数', value: `${allUsers.length}人`, inline: true },
-        { name: '📊 システム全体への影響', value: `${balanceDifference >= 0 ? '+' : ''}${balanceDifference.toLocaleString()}エリクサー`, inline: true },
+        { name: '📊 システム全体への影響', value: `${balanceDifference >= 0 ? '+' : ''}${balanceDifference.toLocaleString()}Ru`, inline: true },
         { name: '📈 現在の残高統計', value: 
-          `平均: ${averageCurrentBalance.toLocaleString()}エリクサー\n` +
-          `最小: ${minBalance.toLocaleString()}エリクサー\n` +
-          `最大: ${maxBalance.toLocaleString()}エリクサー\n` +
-          `総合計: ${totalCurrentBalance.toLocaleString()}エリクサー`, inline: false },
+          `平均: ${averageCurrentBalance.toLocaleString()}Ru\n` +
+          `最小: ${minBalance.toLocaleString()}Ru\n` +
+          `最大: ${maxBalance.toLocaleString()}Ru\n` +
+          `総合計: ${totalCurrentBalance.toLocaleString()}Ru`, inline: false },
         { name: '📉 変更後の状況', value: 
-          `全員: ${targetAmount.toLocaleString()}エリクサー\n` +
-          `新総合計: ${totalNewBalance.toLocaleString()}エリクサー`, inline: false },
+          `全員: ${targetAmount.toLocaleString()}Ru\n` +
+          `新総合計: ${totalNewBalance.toLocaleString()}Ru`, inline: false },
         { name: '⚠️ 重要な警告', value: 
           '• この操作は**全ユーザーの残高を強制的に変更**します\n' +
           '• **経済バランスが完全に破綻**する可能性があります\n' +
@@ -197,7 +197,7 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
     const progressEmbed = new EmbedBuilder()
       .setColor('#ffaa00')
       .setTitle('⏳ 全員残高リセット実行中...')
-      .setDescription(`${allUsers.length}人の残高を${targetAmount.toLocaleString()}エリクサーにリセットしています...`)
+      .setDescription(`${allUsers.length}人の残高を${targetAmount.toLocaleString()}Ruにリセットしています...`)
       .setTimestamp();
 
     await interaction.update({ embeds: [progressEmbed], components: [] });
@@ -221,7 +221,7 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         successCount++;
         
         // システムログに記録
-        console.log(`[BALANCE RESET ALL] User ${user.discord_id}: ${oldBalance} → ${targetAmount} エリクサー`);
+        console.log(`[BALANCE RESET ALL] User ${user.discord_id}: ${oldBalance} → ${targetAmount} Ru`);
         
       } catch (error) {
         console.error(`[BALANCE RESET ALL ERROR] User ${user.discord_id}:`, error);
@@ -235,13 +235,13 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       .setColor(errorCount > 0 ? '#ffaa00' : '#00ff00')
       .setTitle(errorCount > 0 ? '⚠️ 全員残高リセット完了（一部エラー）' : '✅ 全員残高リセット完了')
       .addFields(
-        { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}エリクサー`, inline: true },
+        { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}Ru`, inline: true },
         { name: '✅ 成功', value: `${successCount}人`, inline: true },
         { name: '❌ エラー', value: `${errorCount}人`, inline: true },
         { name: '📊 経済への影響', value: 
-          `変更前総計: ${totalOldBalance.toLocaleString()}エリクサー\n` +
-          `変更後総計: ${totalNewBalance.toLocaleString()}エリクサー\n` +
-          `差分: ${(totalNewBalance - totalOldBalance >= 0 ? '+' : '')}${(totalNewBalance - totalOldBalance).toLocaleString()}エリクサー`, 
+          `変更前総計: ${totalOldBalance.toLocaleString()}Ru\n` +
+          `変更後総計: ${totalNewBalance.toLocaleString()}Ru\n` +
+          `差分: ${(totalNewBalance - totalOldBalance >= 0 ? '+' : '')}${(totalNewBalance - totalOldBalance).toLocaleString()}Ru`, 
           inline: false }
       )
       .setTimestamp();
