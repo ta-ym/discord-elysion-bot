@@ -506,7 +506,15 @@ export class PostgreSQLDatabase {
 
     } catch (error) {
       await client.query('ROLLBACK');
-      console.error('Error in payMonthlySalary:', error);
+      console.error('[PostgreSQL] Error in payMonthlySalary:', error);
+      console.error('[PostgreSQL] payMonthlySalary parameters:', {
+        userId,
+        roleId,
+        amount,
+        paidBy,
+        description,
+        currentMonth
+      });
       throw error;
     } finally {
       client.release();

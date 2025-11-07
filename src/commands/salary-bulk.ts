@@ -111,6 +111,13 @@ const salaryBulkCommand: Command = {
             const roleNames = salaryInfo.roles.map(role => getRoleDisplayName(role.roleId)).join(', ');
 
             // 合算給与を支給（データベースの payMonthlySalary を使用）
+            console.log(`[SALARY-BULK] Processing user: ${member.user.username} (${member.user.id})`);
+            console.log(`[SALARY-BULK] Salary info:`, { 
+              totalSalary: salaryInfo.totalSalary, 
+              primaryRole: salaryInfo.primaryRole?.roleName,
+              roleCount: salaryInfo.roles.length 
+            });
+            
             const salarySuccess = await database.payMonthlySalary(
               member.user.id,
               salaryInfo.primaryRole.roleId,
@@ -120,7 +127,7 @@ const salaryBulkCommand: Command = {
             );
 
             if (!salarySuccess) {
-              throw new Error('給与支給処理に失敗しました');
+              throw new Error(`給与支給処理に失敗しました - User: ${member.user.username} (${member.user.id})`);
             }
 
             roleResult.members.push({
@@ -134,7 +141,14 @@ const salaryBulkCommand: Command = {
             totalAmount += salaryInfo.totalSalary;
 
           } catch (error) {
-            console.error(`Error processing salary for user ${member.user.id}:`, error);
+            console.error(`[SALARY-BULK] Error processing salary for user ${member.user.username} (${member.user.id}):`, error);
+            console.error(`[SALARY-BULK] Error details:`, {
+              userId: member.user.id,
+              username: member.user.username,
+              errorType: error instanceof Error ? error.constructor.name : typeof error,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined
+            });
             
             roleResult.members.push({
               userId: member.user.id,

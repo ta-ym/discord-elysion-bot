@@ -818,8 +818,14 @@ export class Database {
 
   // 月給支給メソッド
   async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
-    if (this.usePostgreSQL && this.pgDb) {
-      return await this.pgDb.payMonthlySalary(userId, roleId, amount, paidBy, description);
+    try {
+      if (this.usePostgreSQL && this.pgDb) {
+        console.log(`[DATABASE] Using PostgreSQL for payMonthlySalary: ${userId}`);
+        return await this.pgDb.payMonthlySalary(userId, roleId, amount, paidBy, description);
+      }
+    } catch (error) {
+      console.error('[DATABASE] PostgreSQL payMonthlySalary failed:', error);
+      throw error;
     }
     
     // SQLiteフォールバック
