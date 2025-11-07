@@ -709,6 +709,180 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // Salary Bulk Preview ボタン処理
+      if (interaction.customId === 'salary_preview_eligible') {
+        console.log(`[SALARY-PREVIEW] Processing eligible users request by ${interaction.user.tag}`);
+        
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-PREVIEW] Eligible interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        try {
+          await interaction.deferReply({ ephemeral: true });
+
+          // 現在の月を取得（または最近の分析結果から）
+          const currentMonth = new Date().toISOString().slice(0, 7);
+          
+          // ギルドと必要なデータを取得
+          const guild = interaction.guild;
+          if (!guild) {
+            await interaction.editReply({
+              content: '❌ サーバー情報の取得に失敗しました。'
+            });
+            return;
+          }
+
+          await guild.members.fetch();
+
+          // 給与分析を実行
+          const { getTotalSalaryByRoleIds } = await import('../config/salaryRoles');
+          const { Database } = await import('../database');
+          
+          const database = new Database();
+          
+          const eligibleUsers: Array<{
+            userId: string;
+            username: string;
+            displayName: string;
+            totalSalary: number;
+            roleCount: number;
+            canReceive: boolean;
+          }> = [];
+
+          // メンバーを分析
+          for (const [, member] of guild.members.cache) {
+            if (member.user.bot) continue;
+
+            const userRoleIds = member.roles.cache.map((r: any) => r.id);
+            const salaryInfo = getTotalSalaryByRoleIds(userRoleIds);
+            
+            if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) {
+              continue;
+            }
+
+            // 既に支給済みかチェック
+            let alreadyPaid = false;
+            try {
+              const existingPayment = await database.checkMonthlySalaryStatus(member.user.id, currentMonth);
+              alreadyPaid = existingPayment !== null;
+            } catch (dbError) {
+              console.warn(`[SALARY-PREVIEW] Database check failed for ${member.user.username}:`, dbError);
+            }
+
+            if (!alreadyPaid) {
+              eligibleUsers.push({
+                userId: member.user.id,
+                username: member.user.username,
+                displayName: member.displayName,
+                totalSalary: salaryInfo.totalSalary,
+                roleCount: salaryInfo.roles.length,
+                canReceive: true
+              });
+            }
+          }
+
+          // 給与額でソート
+          eligibleUsers.sort((a, b) => b.totalSalary - a.totalSalary);
+
+          if (eligibleUsers.length === 0) {
+            await interaction.editReply({
+              content: '📋 現在、給与支給対象となるユーザーはいません。'
+            });
+            return;
+          }
+
+          // Embedを作成（最大25人まで表示）
+          const embed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle(`💚 給与支給対象者 (${eligibleUsers.length}人)`)
+            .setDescription(`**${currentMonth}** の給与支給が可能なユーザー一覧`)
+            .setTimestamp();
+
+          const displayUsers = eligibleUsers.slice(0, 25);
+          const userList = displayUsers.map((user, index) => 
+            `${index + 1}. **${user.displayName}** - ${user.totalSalary.toLocaleString()} Ru (${user.roleCount}ロール)`
+          ).join('\n');
+
+          embed.addFields({
+            name: '👥 対象者リスト',
+            value: userList + (eligibleUsers.length > 25 ? `\n\n... 他${eligibleUsers.length - 25}人` : ''),
+            inline: false
+          });
+
+          // 統計情報を追加
+          const totalAmount = eligibleUsers.reduce((sum, user) => sum + user.totalSalary, 0);
+          const averageAmount = Math.round(totalAmount / eligibleUsers.length);
+          const maxAmount = Math.max(...eligibleUsers.map(u => u.totalSalary));
+          const minAmount = Math.min(...eligibleUsers.map(u => u.totalSalary));
+
+          embed.addFields({
+            name: '📊 統計情報',
+            value: `総支給予定額: **${totalAmount.toLocaleString()} Ru**\n平均給与: **${averageAmount.toLocaleString()} Ru**\n最高額: **${maxAmount.toLocaleString()} Ru**\n最低額: **${minAmount.toLocaleString()} Ru**`,
+            inline: false
+          });
+
+          await interaction.editReply({
+            embeds: [embed]
+          });
+
+        } catch (error) {
+          console.error('[SALARY-PREVIEW] Error processing eligible users:', error);
+          await interaction.editReply({
+            content: '❌ 支給対象者の取得中にエラーが発生しました。'
+          });
+        }
+        return;
+      }
+
+      if (interaction.customId === 'salary_preview_paid') {
+        console.log(`[SALARY-PREVIEW] Processing paid users request by ${interaction.user.tag}`);
+        
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-PREVIEW] Paid interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        await interaction.reply({
+          content: '⚠️ 支給済みユーザーの詳細表示機能は現在開発中です。\n`/salary-bulk preview:true` コマンドで基本情報をご確認いただけます。',
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (interaction.customId === 'salary_preview_roles') {
+        console.log(`[SALARY-PREVIEW] Processing roles analysis request by ${interaction.user.tag}`);
+        
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-PREVIEW] Roles interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        await interaction.reply({
+          content: '⚠️ ロール別集計機能は現在開発中です。\n`/salary-bulk preview:true` コマンドで基本情報をご確認いただけます。',
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Salary Bulk Execute ボタン処理（プレビュー後の実行）
+      if (interaction.customId.startsWith('salary_bulk_execute_')) {
+        console.log(`[SALARY-BULK-EXECUTE] Processing execution request by ${interaction.user.tag}`);
+        
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-BULK-EXECUTE] Execute interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        const targetMonth = interaction.customId.replace('salary_bulk_execute_', '');
+        
+        await interaction.reply({
+          content: `⚠️ プレビュー後の実行機能は現在開発中です。\n\n実際の給与支給を行いたい場合は、以下のコマンドを実行してください：\n\`/salary-bulk month:${targetMonth}\``,
+          ephemeral: true
+        });
+        return;
+      }
+
     } catch (error) {
       console.error(`[BUTTON] Button interaction error for ${interaction.customId}:`, error);
       console.error(`[BUTTON] Error details:`, {
