@@ -4,7 +4,8 @@ import {
   EmbedBuilder, 
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
 
@@ -41,7 +42,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('この超危険な操作を実行するには、確認用フィールドに `RESET_ALL_BALANCES_TO_10000` と正確に入力してください。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -62,7 +63,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('ユーザーデータの取得中にエラーが発生しました。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -73,7 +74,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('残高を変更するユーザーが見つかりませんでした。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [noUsersEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [noUsersEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -131,7 +132,7 @@ export async function execute(interaction: CommandInteraction) {
     await interaction.reply({ 
       embeds: [confirmEmbed], 
       components: [confirmRow],
-      ephemeral: true 
+      flags: MessageFlags.Ephemeral 
     });
 
   } catch (error) {
@@ -144,34 +145,53 @@ export async function execute(interaction: CommandInteraction) {
       .setTimestamp();
 
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
   }
 }
 
 // 全ユーザー取得のヘルパー関数
 async function getAllUsers(): Promise<any[]> {
-  // 注意: この実装は実際のデータベース構造に合わせて調整が必要
-  // 現在は簡単な実装として、データベースに直接クエリを実行
   try {
-    // SQLiteデータベースから全ユーザーを取得
-    const db = (database as any).db; // 内部のSQLiteデータベースにアクセス
-    if (db) {
-      return new Promise((resolve, reject) => {
-        db.all('SELECT discord_id, balance FROM users', [], (err: any, rows: any[]) => {
+    // データベースの内部SQLiteインスタンスにアクセス
+    const dbInstance = (database as any).sqlite || (database as any).db;
+    
+    if (!dbInstance) {
+      console.error('[BALANCE-RESET-ALL] SQLite database instance not found');
+      return [];
+    }
+
+    return new Promise((resolve, reject) => {
+      // テーブルの存在確認
+      dbInstance.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err: any, row: any) => {
+        if (err) {
+          console.error('[BALANCE-RESET-ALL] Error checking table existence:', err);
+          reject(err);
+          return;
+        }
+        
+        if (!row) {
+          console.log('[BALANCE-RESET-ALL] Users table does not exist, returning empty array');
+          resolve([]);
+          return;
+        }
+
+        // ユーザーデータを取得
+        dbInstance.all('SELECT discord_id, balance FROM users WHERE balance IS NOT NULL', [], (err: any, rows: any[]) => {
           if (err) {
+            console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
             reject(err);
           } else {
+            console.log(`[BALANCE-RESET-ALL] Fetched ${rows?.length || 0} users`);
             resolve(rows || []);
           }
         });
       });
-    }
-    return [];
+    });
   } catch (error) {
-    console.error('Error fetching all users:', error);
+    console.error('[BALANCE-RESET-ALL] Error in getAllUsers:', error);
     return [];
   }
 }

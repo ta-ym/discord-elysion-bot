@@ -4,7 +4,8 @@ import {
   EmbedBuilder, 
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
 
@@ -39,7 +40,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('この危険な操作を実行するには、確認用フィールドに `CONFIRM_ROLLBACK_ALL` と正確に入力してください。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -53,7 +54,7 @@ export async function execute(interaction: CommandInteraction) {
           .setDescription('月の形式が正しくありません。YYYY-MM形式で入力してください。\n例: 2024-11')
           .setTimestamp();
 
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
         return;
       }
       monthToRollback = targetMonth;
@@ -72,7 +73,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription(`${monthToRollback}月の月給支給記録が見つかりませんでした。`)
         .setTimestamp();
 
-      await interaction.reply({ embeds: [noDataEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [noDataEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -87,7 +88,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription(`${monthToRollback}月にロールバック可能な月給記録がありません。`)
         .setTimestamp();
 
-      await interaction.reply({ embeds: [noRollbackEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [noRollbackEmbed], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -131,7 +132,7 @@ export async function execute(interaction: CommandInteraction) {
     await interaction.reply({ 
       embeds: [confirmEmbed], 
       components: [confirmRow],
-      ephemeral: true 
+      flags: MessageFlags.Ephemeral 
     });
 
   } catch (error) {
@@ -144,9 +145,9 @@ export async function execute(interaction: CommandInteraction) {
       .setTimestamp();
 
     if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
     }
   }
 }
