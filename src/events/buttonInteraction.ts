@@ -1,4 +1,4 @@
-import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import { Event } from '../types';
 import {
   showPublicVCCreationModal,
@@ -386,6 +386,60 @@ const buttonInteractionEvent: Event = {
         await interaction.update({
           content: '❌ ロールバックをキャンセルしました。',
           embeds: [],
+          components: []
+        });
+        return;
+      }
+
+      // Salary Rollback All 確認ボタン処理
+      if (interaction.customId.startsWith('salary_rollback_all_confirm_')) {
+        console.log(`[SALARY-ROLLBACK-ALL] Processing rollback all confirmation by ${interaction.user.tag}`);
+        
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-ROLLBACK-ALL] Interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        // カスタムIDから月を抽出
+        const month = interaction.customId.replace('salary_rollback_all_confirm_', '');
+
+        try {
+          const { executeSalaryRollbackAll } = await import('../commands/salary-rollback-all');
+          await executeSalaryRollbackAll(interaction, month);
+        } catch (error) {
+          console.error('[SALARY-ROLLBACK-ALL] Error processing rollback all:', error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ エラー')
+            .setDescription('全員ロールバック処理中にエラーが発生しました。')
+            .setTimestamp();
+
+          await interaction.update({
+            embeds: [errorEmbed],
+            components: []
+          });
+        }
+        return;
+      }
+
+      // Salary Rollback All キャンセルボタン処理
+      if (interaction.customId.startsWith('salary_rollback_all_cancel_')) {
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-ROLLBACK-ALL] Cancel interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
+        const cancelEmbed = new EmbedBuilder()
+          .setColor('#999999')
+          .setTitle('❌ 全員ロールバックをキャンセルしました')
+          .setDescription('全員の月給ロールバックは実行されませんでした。')
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [cancelEmbed],
           components: []
         });
         return;

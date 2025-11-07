@@ -2,7 +2,6 @@ import {
   CommandInteraction, 
   SlashCommandBuilder, 
   EmbedBuilder, 
-  PermissionFlagsBits,
   User,
   ActionRowBuilder,
   ButtonBuilder,
@@ -22,8 +21,9 @@ export const data = new SlashCommandBuilder()
   .addStringOption(option =>
     option.setName('month')
       .setDescription('ロールバック対象の月（YYYY-MM形式、省略時は今月）')
-      .setRequired(false))
-  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+      .setRequired(false));
+  // 一時的に管理者権限制限を無効化してテスト
+  // .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
