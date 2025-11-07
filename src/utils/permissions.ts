@@ -67,16 +67,25 @@ export function isPublicCommand(commandName: string): boolean {
  */
 export async function checkCommandPermission(interaction: CommandInteraction, commandName: string): Promise<boolean> {
   const userId = interaction.user.id;
+  const username = interaction.user.username;
+  
+  console.log(`[PERMISSION CHECK] User: ${username} (${userId}) attempting to use command: ${commandName}`);
   
   // 特権ユーザーは全コマンド使用可能
   if (isPrivilegedUser(userId)) {
+    console.log(`[PERMISSION CHECK] User ${username} is privileged - access granted`);
     return false; // 権限あり
   }
   
   // 一般ユーザーは許可されたコマンドのみ使用可能
   if (isPublicCommand(commandName)) {
+    console.log(`[PERMISSION CHECK] Command ${commandName} is public - access granted for ${username}`);
     return false; // 権限あり
   }
+  
+  console.log(`[PERMISSION CHECK] Access denied for user ${username} (${userId}) to command ${commandName}`);
+  console.log(`[PERMISSION CHECK] Privileged users: ${PRIVILEGED_USERS.join(', ')}`);
+  console.log(`[PERMISSION CHECK] Public commands: ${PUBLIC_COMMANDS.join(', ')}`);
   
   // 権限なし - エラーメッセージを送信
   const errorEmbed = new EmbedBuilder()
