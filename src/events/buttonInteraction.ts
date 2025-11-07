@@ -445,6 +445,60 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // Balance Reset All 確認ボタン処理
+      if (interaction.customId.startsWith('balance_reset_all_confirm_')) {
+        console.log(`[BALANCE-RESET-ALL] Processing balance reset all confirmation by ${interaction.user.tag}`);
+        
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[BALANCE-RESET-ALL] Interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        // カスタムIDから金額を抽出
+        const targetAmount = parseInt(interaction.customId.replace('balance_reset_all_confirm_', ''));
+
+        try {
+          const { executeBalanceResetAll } = await import('../commands/balance-reset-all');
+          await executeBalanceResetAll(interaction, targetAmount);
+        } catch (error) {
+          console.error('[BALANCE-RESET-ALL] Error processing balance reset all:', error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ エラー')
+            .setDescription('全員残高リセット処理中にエラーが発生しました。')
+            .setTimestamp();
+
+          await interaction.update({
+            embeds: [errorEmbed],
+            components: []
+          });
+        }
+        return;
+      }
+
+      // Balance Reset All キャンセルボタン処理
+      if (interaction.customId.startsWith('balance_reset_all_cancel_')) {
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[BALANCE-RESET-ALL] Cancel interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
+        const cancelEmbed = new EmbedBuilder()
+          .setColor('#999999')
+          .setTitle('❌ 全員残高リセットをキャンセルしました')
+          .setDescription('全員の残高リセットは実行されませんでした。')
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [cancelEmbed],
+          components: []
+        });
+        return;
+      }
+
     } catch (error) {
       console.error(`[BUTTON] Button interaction error for ${interaction.customId}:`, error);
       console.error(`[BUTTON] Error details:`, {
