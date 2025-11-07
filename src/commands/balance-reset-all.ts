@@ -55,12 +55,10 @@ export async function execute(interaction: CommandInteraction) {
     // 全ユーザーの現在の残高を取得
     console.log('[BALANCE-RESET-ALL] Fetching all users for balance reset...');
     
-    // SQLiteから全ユーザーを取得（PostgreSQLは後でフォールバック）
+    // サーバーの全メンバーと既存データベースユーザーを統合取得
     let allUsers: any[] = [];
     try {
-      // データベースから全ユーザーを取得する方法を実装
-      // 注意: この部分は実際のデータベース構造に合わせて調整が必要
-      allUsers = await getAllUsers();
+      allUsers = await getAllUsers(interaction);
     } catch (error) {
       console.error('[BALANCE-RESET-ALL] Error fetching users:', error);
       const errorEmbed = new EmbedBuilder()
@@ -84,12 +82,16 @@ export async function execute(interaction: CommandInteraction) {
       return;
     }
 
+    // ユーザー分類統計
+    const existingUsers = allUsers.filter(user => !user.isNewUser);
+    const newUsers = allUsers.filter(user => user.isNewUser);
+    
     // 現在の残高統計を計算
-    const currentBalances = allUsers.map(user => user.balance || 0);
+    const currentBalances = existingUsers.map(user => user.balance || 0);
     const totalCurrentBalance = currentBalances.reduce((sum, balance) => sum + balance, 0);
-    const averageCurrentBalance = Math.round(totalCurrentBalance / allUsers.length);
-    const minBalance = Math.min(...currentBalances);
-    const maxBalance = Math.max(...currentBalances);
+    const averageCurrentBalance = existingUsers.length > 0 ? Math.round(totalCurrentBalance / existingUsers.length) : 0;
+    const minBalance = currentBalances.length > 0 ? Math.min(...currentBalances) : 0;
+    const maxBalance = currentBalances.length > 0 ? Math.max(...currentBalances) : 0;
     
     // 変更後の統計
     const totalNewBalance = allUsers.length * targetAmount;
@@ -104,11 +106,17 @@ export async function execute(interaction: CommandInteraction) {
         { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}Ru`, inline: true },
         { name: '👥 対象ユーザー数', value: `${allUsers.length}人`, inline: true },
         { name: '📊 システム全体への影響', value: `${balanceDifference >= 0 ? '+' : ''}${balanceDifference.toLocaleString()}Ru`, inline: true },
-        { name: '📈 現在の残高統計', value: 
+        { name: '� ユーザー分類', value: 
+          `既存ユーザー: ${existingUsers.length}人\n` +
+          `新規ユーザー: ${newUsers.length}人\n` +
+          `合計: ${allUsers.length}人`, inline: false },
+        { name: '�📈 既存ユーザーの残高統計', value: 
+          existingUsers.length > 0 ? 
           `平均: ${averageCurrentBalance.toLocaleString()}Ru\n` +
           `最小: ${minBalance.toLocaleString()}Ru\n` +
           `最大: ${maxBalance.toLocaleString()}Ru\n` +
-          `総合計: ${totalCurrentBalance.toLocaleString()}Ru`, inline: false },
+          `既存総計: ${totalCurrentBalance.toLocaleString()}Ru` :
+          '既存ユーザーなし', inline: false },
         { name: '📉 変更後の状況', value: 
           `全員: ${targetAmount.toLocaleString()}Ru\n` +
           `新総合計: ${totalNewBalance.toLocaleString()}Ru`, inline: false },
@@ -158,10 +166,41 @@ export async function execute(interaction: CommandInteraction) {
   }
 }
 
-// 全ユーザー取得のヘルパー関数
-async function getAllUsers(): Promise<any[]> {
+// Discordサーバーの全メンバーを取得するヘルパー関数
+async function getAllServerMembers(interaction: CommandInteraction): Promise<any[]> {
   try {
-    console.log('[BALANCE-RESET-ALL] Attempting to fetch all users...');
+    console.log('[BALANCE-RESET-ALL] Fetching all server members...');
+    
+    if (!interaction.guild) {
+      console.error('[BALANCE-RESET-ALL] Guild not found');
+      return [];
+    }
+
+    // サーバーの全メンバーを取得
+    const guild = interaction.guild;
+    await guild.members.fetch(); // 全メンバーを取得
+    
+    const allMembers = guild.members.cache
+      .filter(member => !member.user.bot) // ボットを除外
+      .map(member => ({
+        discord_id: member.user.id,
+        username: member.user.username,
+        displayName: member.displayName
+      }));
+
+    console.log(`[BALANCE-RESET-ALL] Found ${allMembers.length} server members (excluding bots)`);
+    return allMembers;
+
+  } catch (error) {
+    console.error('[BALANCE-RESET-ALL] Error fetching server members:', error);
+    return [];
+  }
+}
+
+// データベースの既存ユーザーを取得するヘルパー関数
+async function getExistingUsers(): Promise<any[]> {
+  try {
+    console.log('[BALANCE-RESET-ALL] Fetching existing users from database...');
     
     // PostgreSQLが利用可能かチェック
     const usePostgreSQL = (database as any).usePostgreSQL;
@@ -179,7 +218,7 @@ async function getAllUsers(): Promise<any[]> {
       
       try {
         const users = await postgresDb.getAllUsers();
-        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} users`);
+        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} existing users`);
         return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance }));
       } catch (pgError) {
         console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
@@ -212,17 +251,49 @@ async function getAllUsers(): Promise<any[]> {
         }
 
         // ユーザーデータを取得
-        dbInstance.all('SELECT discord_id, balance FROM users WHERE balance IS NOT NULL', [], (err: any, rows: any[]) => {
+        dbInstance.all('SELECT discord_id, balance FROM users', [], (err: any, rows: any[]) => {
           if (err) {
             console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
             reject(err);
           } else {
-            console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} users`);
+            console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} existing users`);
             resolve(rows || []);
           }
         });
       });
     });
+  } catch (error) {
+    console.error('[BALANCE-RESET-ALL] Error in getExistingUsers:', error);
+    return [];
+  }
+}
+
+// 全ユーザー（サーバーメンバー）の残高情報を統合取得
+async function getAllUsers(interaction: CommandInteraction): Promise<any[]> {
+  try {
+    // 1. サーバーの全メンバーを取得
+    const serverMembers = await getAllServerMembers(interaction);
+    if (serverMembers.length === 0) {
+      console.log('[BALANCE-RESET-ALL] No server members found');
+      return [];
+    }
+
+    // 2. 既存のデータベースユーザーを取得
+    const existingUsers = await getExistingUsers();
+    const existingUserMap = new Map(existingUsers.map(user => [user.discord_id, user.balance || 10000]));
+
+    // 3. サーバーメンバーと既存ユーザーを統合
+    const allUsers = serverMembers.map(member => ({
+      discord_id: member.discord_id,
+      username: member.username,
+      displayName: member.displayName,
+      balance: existingUserMap.get(member.discord_id) || 10000, // デフォルト残高
+      isNewUser: !existingUserMap.has(member.discord_id)
+    }));
+
+    console.log(`[BALANCE-RESET-ALL] Total users: ${allUsers.length} (${allUsers.filter(u => u.isNewUser).length} new, ${allUsers.filter(u => !u.isNewUser).length} existing)`);
+    return allUsers;
+
   } catch (error) {
     console.error('[BALANCE-RESET-ALL] Error in getAllUsers:', error);
     return [];
@@ -233,7 +304,7 @@ async function getAllUsers(): Promise<any[]> {
 export async function executeBalanceResetAll(interaction: any, targetAmount: number) {
   try {
     // 再度全ユーザーを取得
-    const allUsers = await getAllUsers();
+    const allUsers = await getAllUsers(interaction);
 
     if (allUsers.length === 0) {
       const errorEmbed = new EmbedBuilder()
@@ -267,21 +338,26 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         const oldBalance = user.balance || 0;
         totalOldBalance += oldBalance;
         
-        // 残高を更新
-        await database.updateUserBalance(user.discord_id, targetAmount);
+        // 残高を設定（存在しない場合は作成）
+        await database.setUserBalance(user.discord_id, targetAmount);
         
         totalNewBalance += targetAmount;
         successCount++;
         
         // システムログに記録
-        console.log(`[BALANCE RESET ALL] User ${user.discord_id}: ${oldBalance} → ${targetAmount} Ru`);
+        const status = user.isNewUser ? 'CREATED' : 'UPDATED';
+        console.log(`[BALANCE RESET ALL] User ${user.discord_id} (${user.displayName}): ${oldBalance} → ${targetAmount} Ru [${status}]`);
         
       } catch (error) {
-        console.error(`[BALANCE RESET ALL ERROR] User ${user.discord_id}:`, error);
+        console.error(`[BALANCE RESET ALL ERROR] User ${user.discord_id} (${user.displayName}):`, error);
         errorCount++;
         errorUsers.push(`<@${user.discord_id}>`);
       }
     }
+
+    // 実行統計
+    const newUsersProcessed = allUsers.filter(u => u.isNewUser).length;
+    const existingUsersProcessed = allUsers.filter(u => !u.isNewUser).length;
 
     // 結果表示
     const resultEmbed = new EmbedBuilder()
@@ -291,6 +367,10 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}Ru`, inline: true },
         { name: '✅ 成功', value: `${successCount}人`, inline: true },
         { name: '❌ エラー', value: `${errorCount}人`, inline: true },
+        { name: '👥 処理詳細', value: 
+          `既存ユーザー更新: ${existingUsersProcessed - allUsers.filter(u => !u.isNewUser && errorUsers.includes(`<@${u.discord_id}>`)).length}人\n` +
+          `新規ユーザー作成: ${newUsersProcessed - allUsers.filter(u => u.isNewUser && errorUsers.includes(`<@${u.discord_id}>`)).length}人\n` +
+          `合計処理: ${successCount}人`, inline: false },
         { name: '📊 経済への影響', value: 
           `変更前総計: ${totalOldBalance.toLocaleString()}Ru\n` +
           `変更後総計: ${totalNewBalance.toLocaleString()}Ru\n` +

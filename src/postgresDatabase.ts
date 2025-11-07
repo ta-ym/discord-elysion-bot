@@ -186,6 +186,25 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // ユーザーの残高を設定（存在しない場合は作成）
+  async setUserBalance(discordId: string, newBalance: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        `INSERT INTO users (discord_id, balance) VALUES ($1, $2)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = EXCLUDED.balance, 
+         updated_at = CURRENT_TIMESTAMP`,
+        [discordId, newBalance]
+      );
+    } catch (error) {
+      console.error('Error in setUserBalance:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 取引関連メソッド
   async createTransaction(
     fromUserId: string | null,

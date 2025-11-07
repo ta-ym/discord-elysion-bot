@@ -374,6 +374,30 @@ export class Database {
     });
   }
 
+  // ユーザーの残高を設定（存在しない場合は作成）
+  async setUserBalance(discordId: string, newBalance: number): Promise<void> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.setUserBalance(discordId, newBalance);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      // UPSERT操作：存在する場合は更新、存在しない場合は作成
+      this.db.run(
+        `INSERT INTO users (discord_id, balance, created_at, updated_at) 
+         VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT(discord_id) DO UPDATE SET 
+         balance = excluded.balance, 
+         updated_at = CURRENT_TIMESTAMP`,
+        [discordId, newBalance],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
   // 取引履歴関連メソッド（PostgreSQLに委譲またはSQLiteフォールバック）
   async addTransaction(
     fromUserId: string | null,
