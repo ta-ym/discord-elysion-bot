@@ -591,6 +591,87 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 給与詳細取得
+  async getSalaryDetails(userId: string, month: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2 ORDER BY created_at DESC',
+        [userId, month]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getSalaryDetails:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Bulk Salary結果を保存
+  async saveBulkSalaryResults(results: any[], processedBy: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 一時的な結果保存テーブルを作成（存在しない場合）
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS bulk_salary_results (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('success', 'skipped', 'error')),
+          amount INTEGER,
+          reason TEXT,
+          processed_by TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // 古い結果を削除（24時間以上前）
+      await client.query(
+        'DELETE FROM bulk_salary_results WHERE created_at < NOW() - INTERVAL \'24 hours\''
+      );
+
+      // 新しい結果を保存
+      for (const result of results) {
+        await client.query(
+          'INSERT INTO bulk_salary_results (user_id, status, amount, reason, processed_by) VALUES ($1, $2, $3, $4, $5)',
+          [result.userId, result.status, result.amount || null, result.reason || null, processedBy]
+        );
+      }
+
+      await client.query('COMMIT');
+      console.log(`[PostgreSQL] Saved ${results.length} bulk salary results for ${processedBy}`);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error in saveBulkSalaryResults:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 最新のBulk Salary結果を取得
+  async getLatestBulkSalaryResults(processedBy: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      // 最新の1時間以内の結果を取得
+      const result = await client.query(
+        `SELECT * FROM bulk_salary_results 
+         WHERE processed_by = $1 
+         AND created_at > NOW() - INTERVAL '1 hour'
+         ORDER BY created_at DESC`,
+        [processedBy]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getLatestBulkSalaryResults:', error);
+      return []; // エラーの場合は空配列を返す
+    } finally {
+      client.release();
+    }
+  }
+
   // 接続終了
   async close(): Promise<void> {
     await this.pool.end();

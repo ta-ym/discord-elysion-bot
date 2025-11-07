@@ -17,3 +17,24 @@ export interface BotConfig {
   clientId: string;
   guildId?: string;
 }
+
+export interface SalaryDetail {
+  id: number;
+  user_id: string;
+  role_id: string;
+  amount: number;
+  claim_month: string;
+  paid_by: string;
+  description: string;
+  created_at: string;
+}
+
+export interface BulkSalaryResult {
+  id: number;
+  user_id: string;
+  status: 'success' | 'skipped' | 'error';
+  amount?: number;
+  reason?: string;
+  processed_by: string;
+  created_at: string;
+}

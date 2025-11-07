@@ -1328,6 +1328,46 @@ export class Database {
     });
   }
 
+  // 給与詳細取得メソッド
+  async getSalaryDetails(userId: string, month: string): Promise<any[]> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getSalaryDetails(userId, month);
+    }
+    
+    // SQLiteフォールバック
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        'SELECT * FROM monthly_salary_claims WHERE user_id = ? AND claim_month = ? ORDER BY created_at DESC',
+        [userId, month],
+        (err: any, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  // Bulk Salary結果を保存
+  async saveBulkSalaryResults(results: any[], processedBy: string): Promise<void> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.saveBulkSalaryResults(results, processedBy);
+    }
+    
+    // SQLiteフォールバック: bulk_salary_resultsテーブルがない場合はスキップ
+    console.log('Bulk salary results save - SQLite not supported, skipping save');
+  }
+
+  // 最新のBulk Salary結果を取得
+  async getLatestBulkSalaryResults(processedBy: string): Promise<any[]> {
+    if (this.usePostgreSQL && this.pgDb) {
+      return await this.pgDb.getLatestBulkSalaryResults(processedBy);
+    }
+    
+    // SQLiteフォールバック: 空配列を返す
+    console.log('Bulk salary results retrieval - SQLite not supported, returning empty array');
+    return [];
+  }
+
   close(): void {
     this.db.close((err) => {
       if (err) {

@@ -221,8 +221,15 @@ const salaryBulkCommand: Command = {
         components: [detailButton]
       });
 
-      // 詳細結果のデータを一時保存（実際の実装では Redis などを使用）
-      (interaction as any).bulkResults = processResults;
+      // 詳細結果をデータベースに保存
+      try {
+        const { globalDatabase } = await import('../index');
+        await globalDatabase.saveBulkSalaryResults(processResults, interaction.user.id);
+        console.log(`[BULK SALARY] Saved ${processResults.length} results to database`);
+      } catch (saveError) {
+        console.error('[BULK SALARY] Failed to save results to database:', saveError);
+        // 保存エラーが発生してもコマンド処理は継続
+      }
 
       console.log(`[BULK SALARY] ${interaction.user.tag} executed bulk salary for ${targetMonth}: ${totalSuccess} success, ${totalSkipped} skipped, ${totalErrors} errors`);
 

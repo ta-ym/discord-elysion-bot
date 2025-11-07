@@ -1,5 +1,5 @@
 import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { Event } from '../types';
+import { Event, BulkSalaryResult } from '../types';
 import {
   showPublicVCCreationModal,
   showPublicVCList,
@@ -496,6 +496,95 @@ const buttonInteractionEvent: Event = {
           embeds: [cancelEmbed],
           components: []
         });
+        return;
+      }
+
+      // Salary Bulk Details 表示ボタン処理
+      if (interaction.customId === 'salary_bulk_details') {
+        console.log(`[SALARY-BULK] Processing bulk salary details request by ${interaction.user.tag}`);
+        
+        // インタラクションが既に処理済みかチェック
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-BULK] Details interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        try {
+          await interaction.deferReply({ ephemeral: true });
+          
+          // データベースから最新の一斉給与結果を取得
+          const { globalDatabase } = await import('../index');
+          const bulkResults: BulkSalaryResult[] = await globalDatabase.getLatestBulkSalaryResults(interaction.user.id);
+          
+          if (!bulkResults || bulkResults.length === 0) {
+            await interaction.editReply({
+              content: '❌ 詳細結果が見つかりませんでした。結果は実行から1時間で自動削除されます。'
+            });
+            return;
+          }
+
+          // 結果を分類
+          const successResults = bulkResults.filter((r: BulkSalaryResult) => r.status === 'success');
+          const skippedResults = bulkResults.filter((r: BulkSalaryResult) => r.status === 'skipped');
+          const errorResults = bulkResults.filter((r: BulkSalaryResult) => r.status === 'error');
+
+          const embeds: EmbedBuilder[] = [];
+
+          // 成功結果の詳細
+          if (successResults.length > 0) {
+            const successEmbed = new EmbedBuilder()
+              .setColor('#00ff00')
+              .setTitle(`✅ 支給成功 (${successResults.length}件)`)
+              .setDescription(
+                successResults
+                  .slice(0, 25) // Discord の field 制限により最大25件
+                  .map((r: BulkSalaryResult) => `👤 <@${r.user_id}> - ${r.amount?.toLocaleString()} Ru`)
+                  .join('\n') + 
+                (successResults.length > 25 ? `\n\n... および他 ${successResults.length - 25} 件` : '')
+              );
+            embeds.push(successEmbed);
+          }
+
+          // スキップ結果の詳細
+          if (skippedResults.length > 0) {
+            const skippedEmbed = new EmbedBuilder()
+              .setColor('#ffaa00')
+              .setTitle(`⚠️ スキップ (${skippedResults.length}件)`)
+              .setDescription(
+                skippedResults
+                  .slice(0, 25)
+                  .map((r: BulkSalaryResult) => `👤 <@${r.user_id}> - ${r.reason || '既に支給済み'}`)
+                  .join('\n') +
+                (skippedResults.length > 25 ? `\n\n... および他 ${skippedResults.length - 25} 件` : '')
+              );
+            embeds.push(skippedEmbed);
+          }
+
+          // エラー結果の詳細
+          if (errorResults.length > 0) {
+            const errorEmbed = new EmbedBuilder()
+              .setColor('#ff0000')
+              .setTitle(`❌ エラー (${errorResults.length}件)`)
+              .setDescription(
+                errorResults
+                  .slice(0, 25)
+                  .map((r: BulkSalaryResult) => `👤 <@${r.user_id}> - ${r.reason || 'エラー発生'}`)
+                  .join('\n') +
+                (errorResults.length > 25 ? `\n\n... および他 ${errorResults.length - 25} 件` : '')
+              );
+            embeds.push(errorEmbed);
+          }
+
+          await interaction.editReply({
+            embeds: embeds
+          });
+
+        } catch (error) {
+          console.error('[SALARY-BULK] Error retrieving bulk salary details:', error);
+          await interaction.editReply({
+            content: '❌ 詳細結果の取得中にエラーが発生しました。'
+          });
+        }
         return;
       }
 
