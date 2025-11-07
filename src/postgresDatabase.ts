@@ -566,6 +566,20 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // 全ユーザー取得（balance-reset-all用）
+  async getAllUsers(): Promise<User[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query('SELECT * FROM users ORDER BY discord_id');
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getAllUsers:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // 接続終了
   async close(): Promise<void> {
     await this.pool.end();

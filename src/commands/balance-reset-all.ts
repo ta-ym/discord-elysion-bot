@@ -178,9 +178,9 @@ async function getAllUsers(): Promise<any[]> {
       }
       
       try {
-        const result = await postgresDb.query('SELECT discord_id, balance FROM users WHERE balance IS NOT NULL');
-        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${result.rows?.length || 0} users`);
-        return result.rows || [];
+        const users = await postgresDb.getAllUsers();
+        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} users`);
+        return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance }));
       } catch (pgError) {
         console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
         console.log('[BALANCE-RESET-ALL] Falling back to SQLite...');
