@@ -3,6 +3,7 @@ import { Command } from '../types';
 import { globalDatabase } from '../index';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 import { sendAdminGiveLog } from '../utils/ruLogger';
+import { checkCommandPermission } from '../utils/permissions';
 
 const giveCommand: Command = {
   data: new SlashCommandBuilder()
@@ -24,13 +25,9 @@ const giveCommand: Command = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   
   async execute(interaction: ChatInputCommandInteraction) {
-    // 管理者権限チェック
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-      await interaction.reply({ 
-        content: '❌ この機能は管理者のみ使用できます。', 
-        ephemeral: true 
-      });
-      return;
+    // 権限チェック
+    if (await checkCommandPermission(interaction, 'give')) {
+      return; // 権限なし
     }
 
     const targetUser = interaction.options.getUser('user', true);

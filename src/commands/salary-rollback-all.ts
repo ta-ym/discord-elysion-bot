@@ -8,6 +8,7 @@ import {
   MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
+import { checkCommandPermission } from '../utils/permissions';
 
 const database = new Database();
 
@@ -27,6 +28,11 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
+
+  // 権限チェック
+  if (await checkCommandPermission(interaction, 'salary-rollback-all')) {
+    return; // 権限なし
+  }
 
   try {
     const targetMonth = interaction.options.getString('month');

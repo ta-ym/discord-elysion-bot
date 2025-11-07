@@ -1,8 +1,8 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, PermissionFlagsBits, Role } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
 import { getActiveSalaryRoles, getSalaryByRoleId, getHighestSalaryByRoleIds, getRoleDisplayName } from '../config/salaryRoles';
-import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { checkCommandPermission } from '../utils/permissions';
 
 const salaryCommand: Command = {
   data: new SlashCommandBuilder()
@@ -27,14 +27,9 @@ const salaryCommand: Command = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   
   async execute(interaction: ChatInputCommandInteraction) {
-    const member = interaction.member as GuildMember;
-    
-    if (!hasSalaryPermission(member)) {
-      await interaction.reply({
-        content: getSalaryPermissionErrorMessage(),
-        ephemeral: true
-      });
-      return;
+    // 権限チェック
+    if (await checkCommandPermission(interaction, 'salary')) {
+      return; // 権限なし
     }
 
     const targetUser = interaction.options.getUser('user', true);
