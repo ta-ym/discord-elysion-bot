@@ -47,13 +47,43 @@ export class PostgreSQLDatabase {
     this.pool = new Pool({
       connectionString: process.env['DATABASE_URL'],
       ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
+      // 接続タイムアウト設定
+      connectionTimeoutMillis: 10000, // 10秒でタイムアウト
+      idleTimeoutMillis: 30000, // 30秒でアイドル接続を終了
+      max: 10, // 最大接続数
+      // クエリタイムアウト設定
+      query_timeout: 10000, // 10秒でクエリタイムアウト
+      // 接続リトライ設定
+      application_name: 'elysion-bot'
     });
 
-    // 非同期初期化を実行（エラーハンドリング付き）
-    this.initializeTables().catch(error => {
-      console.error('PostgreSQL初期化エラー:', error);
+    // 非同期初期化を実行（リトライ機能付き）
+    this.initializeWithRetry(3).catch(error => {
+      console.error('PostgreSQL初期化最終エラー:', error);
       console.error('ボット起動を継続しますが、通貨機能は利用できません');
     });
+  }
+
+  private async initializeWithRetry(maxRetries: number): Promise<void> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries}`);
+        await this.initializeTables();
+        console.log('PostgreSQL初期化成功');
+        return;
+      } catch (error) {
+        console.error(`PostgreSQL初期化試行 ${attempt} 失敗:`, error);
+        
+        if (attempt === maxRetries) {
+          throw error; // 最後の試行で失敗した場合は例外を投げる
+        }
+        
+        // 指数バックオフで待機（2秒、4秒、8秒...）
+        const waitTime = Math.pow(2, attempt) * 1000;
+        console.log(`${waitTime}ms待機してリトライします...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
   }
 
   private async initializeTables(): Promise<void> {
@@ -131,6 +161,19 @@ export class PostgreSQLDatabase {
       await client.query('ROLLBACK');
       console.error('Error initializing PostgreSQL tables:', error);
       throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 健全性チェック
+  async healthCheck(): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query('SELECT 1 as test');
+      if (!result.rows || result.rows.length === 0) {
+        throw new Error('Health check query failed');
+      }
     } finally {
       client.release();
     }

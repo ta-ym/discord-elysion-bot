@@ -124,9 +124,22 @@ export class Database {
         console.log('PostgreSQL通貨システムを初期化中...');
         
         this.pgDb = new PostgreSQLDatabase();
+        
+        // PostgreSQL接続の健全性チェックを遅延実行
+        setTimeout(async () => {
+          try {
+            await this.checkPostgreSQLHealth();
+          } catch (healthError) {
+            console.error('PostgreSQL健全性チェック失敗:', healthError);
+            console.log('SQLiteフォールバックモードに切り替えます');
+            this.pgDb = null;
+            this.usePostgreSQL = false;
+          }
+        }, 5000); // 5秒後にチェック
+        
       } catch (error) {
         console.error('PostgreSQL初期化エラー:', error);
-        console.log('ボット起動を継続しますが、通貨機能は利用できません');
+        console.log('SQLiteフォールバックモードで起動します');
         this.pgDb = null;
         this.usePostgreSQL = false;
       }
@@ -171,6 +184,15 @@ export class Database {
         this.initializeTables();
       }
     });
+  }
+
+  private async checkPostgreSQLHealth(): Promise<void> {
+    if (!this.pgDb) throw new Error('PostgreSQL instance not available');
+    
+    // PostgreSQLDatabaseクラスの健全性チェックメソッドを呼び出し
+    await this.pgDb.healthCheck();
+    
+    console.log('PostgreSQL健全性チェック完了');
   }
 
   private initializeTables(): void {
