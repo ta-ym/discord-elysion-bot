@@ -318,7 +318,22 @@ const salaryBulkCommand: Command = {
         return;
       }
 
-      await guild.members.fetch(); // 全メンバーをキャッシュに読み込み
+      // 全メンバーを安全に取得（タイムアウト対策）
+      console.log(`[BULK SALARY] Attempting to fetch guild members...`);
+      try {
+        await guild.members.fetch({ limit: 1000, time: 30000 });
+        console.log(`[BULK SALARY] Successfully fetched guild members`);
+      } catch (fetchError: any) {
+        if (fetchError.code === 'GuildMembersTimeout') {
+          console.warn(`[BULK SALARY] Guild members fetch timeout, using cached members`);
+          // タイムアウトの場合はキャッシュされたメンバーを使用
+        } else {
+          console.error(`[BULK SALARY] Unexpected error fetching members:`, fetchError);
+          // 他のエラーの場合も続行（キャッシュされたメンバーを使用）
+        }
+      }
+
+      console.log(`[BULK SALARY] Current cached members: ${guild.members.cache.size}`);
 
       // 全ユーザーの給与情報を分析
       const allUserAnalysis = await analyzeAllUsers(guild, database, targetMonth);
@@ -515,8 +530,23 @@ export async function executeSalaryBulkFromPreview(
       components: []
     });
 
-    // 全メンバーを取得
-    await guild.members.fetch();
+    // 全メンバーを安全に取得（タイムアウト対策）
+    console.log(`[SALARY-BULK-EXECUTE] Attempting to fetch guild members...`);
+    try {
+      await guild.members.fetch({ limit: 1000, time: 30000 });
+      console.log(`[SALARY-BULK-EXECUTE] Successfully fetched guild members`);
+    } catch (fetchError: any) {
+      if (fetchError.code === 'GuildMembersTimeout') {
+        console.warn(`[SALARY-BULK-EXECUTE] Guild members fetch timeout, using cached members`);
+        // タイムアウトの場合はキャッシュされたメンバーを使用
+      } else {
+        console.error(`[SALARY-BULK-EXECUTE] Unexpected error fetching members:`, fetchError);
+        // 他のエラーの場合も続行（キャッシュされたメンバーを使用）
+      }
+    }
+
+    // 現在のキャッシュ状態を確認
+    console.log(`[SALARY-BULK-EXECUTE] Current cached members: ${guild.members.cache.size}`);
 
     // 全ユーザーの給与情報を再分析
     const allUserAnalysis = await analyzeAllUsers(guild, database, targetMonth);
