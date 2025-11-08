@@ -327,9 +327,31 @@ async function getAllUsers(interaction: CommandInteraction): Promise<any[]> {
   }
 }
 
+// 実行中の操作を追跡するSet（メモリ内）
+const activeResetOperations = new Set<string>();
+
 // 全員残高リセット実行関数
 export async function executeBalanceResetAll(interaction: any, targetAmount: number) {
   const db = getDatabase();
+  
+  // 重複実行を防ぐためのチェック
+  const operationKey = `${interaction.user.id}_balance_reset_all_${targetAmount}`;
+  
+  if (activeResetOperations.has(operationKey)) {
+    console.log(`[BALANCE-RESET-ALL] Operation already in progress for user ${interaction.user.tag}, skipping`);
+    
+    const busyEmbed = new EmbedBuilder()
+      .setColor('#ffaa00')
+      .setTitle('⏳ 処理中')
+      .setDescription('同じ操作が既に実行中です。完了をお待ちください。')
+      .setTimestamp();
+
+    await interaction.update({ embeds: [busyEmbed], components: [] });
+    return;
+  }
+  
+  // 操作開始を記録
+  activeResetOperations.add(operationKey);
   
   try {
     // 再度全ユーザーを取得
@@ -346,23 +368,34 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       return;
     }
 
-    // プログレス表示
+    // プログレス表示（詳細版）
     const progressEmbed = new EmbedBuilder()
       .setColor('#ffaa00')
       .setTitle('⏳ 全員残高リセット実行中...')
       .setDescription(`${allUsers.length}人の残高を${targetAmount.toLocaleString()}Ruにリセットしています...`)
+      .addFields(
+        { name: '📊 対象ユーザー', value: `合計 ${allUsers.length}人`, inline: true },
+        { name: '🎯 設定残高', value: `${targetAmount.toLocaleString()}Ru`, inline: true },
+        { name: '⏱️ 予想処理時間', value: `約${Math.ceil(allUsers.length / 10)}秒`, inline: true },
+        { name: '⚠️ 重要', value: '処理中はブラウザを閉じずにお待ちください。', inline: false }
+      )
       .setTimestamp();
 
-    await interaction.update({ embeds: [progressEmbed], components: [] });
+    await interaction.editReply({ embeds: [progressEmbed], components: [] });
 
     let successCount = 0;
     let errorCount = 0;
     const errorUsers: string[] = [];
     let totalOldBalance = 0;
     let totalNewBalance = 0;
+    const startTime = Date.now();
+
+    // 進捗更新のための定期的な報告（50ユーザーごと）
+    const updateProgressEvery = Math.max(50, Math.floor(allUsers.length / 10));
 
     // 各ユーザーの残高をリセット
-    for (const user of allUsers) {
+    for (let i = 0; i < allUsers.length; i++) {
+      const user = allUsers[i];
       try {
         const oldBalance = user.balance || 0;
         totalOldBalance += oldBalance;
@@ -402,6 +435,36 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         });
         errorCount++;
         errorUsers.push(`<@${user.discord_id}>`);
+      }
+
+      // 進捗更新（定期的）
+      if ((i + 1) % updateProgressEvery === 0 || i === allUsers.length - 1) {
+        const progressPercent = Math.round(((i + 1) / allUsers.length) * 100);
+        const elapsedTime = Math.round((Date.now() - startTime) / 1000);
+        const estimatedTotal = Math.round((elapsedTime / (i + 1)) * allUsers.length);
+        const remainingTime = Math.max(0, estimatedTotal - elapsedTime);
+
+        console.log(`[BALANCE-RESET-ALL] Progress: ${i + 1}/${allUsers.length} (${progressPercent}%) - Success: ${successCount}, Errors: ${errorCount}, ETA: ${remainingTime}s`);
+
+        // 大きなバッチの場合は進捗をDiscordにも更新
+        if (allUsers.length > 100 && (i + 1) % (updateProgressEvery * 2) === 0) {
+          try {
+            const progressEmbed = new EmbedBuilder()
+              .setColor('#ffaa00')
+              .setTitle('⏳ 全員残高リセット実行中...')
+              .setDescription(`進捗: ${i + 1}/${allUsers.length} (${progressPercent}%)`)
+              .addFields(
+                { name: '✅ 成功', value: `${successCount}人`, inline: true },
+                { name: '❌ エラー', value: `${errorCount}人`, inline: true },
+                { name: '⏱️ 残り時間', value: `約${remainingTime}秒`, inline: true }
+              )
+              .setTimestamp();
+
+            await interaction.editReply({ embeds: [progressEmbed], components: [] });
+          } catch (updateError) {
+            console.warn('[BALANCE-RESET-ALL] Failed to update progress:', updateError);
+          }
+        }
       }
     }
 
@@ -455,5 +518,9 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       .setTimestamp();
 
     await interaction.editReply({ embeds: [errorEmbed], components: [] });
+  } finally {
+    // 操作完了を記録（成功・エラーに関わらず）
+    activeResetOperations.delete(operationKey);
+    console.log(`[BALANCE-RESET-ALL] Operation completed for user ${interaction.user.tag}, removed from active operations`);
   }
 }

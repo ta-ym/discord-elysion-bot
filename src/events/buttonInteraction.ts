@@ -12,6 +12,10 @@ import { changeVCLimit } from '../utils/tempVCManager';
 const processedInteractions = new Set<string>();
 const MAX_PROCESSED_INTERACTIONS = 1000;
 
+// ユーザー固有のボタン操作をタイムスタンプベースで記録（重複クリック防止）
+const userButtonActions = new Map<string, number>();
+const BUTTON_COOLDOWN_MS = 2000; // 2秒のクールダウン
+
 const buttonInteractionEvent: Event = {
   name: Events.InteractionCreate,
   execute: async (interaction) => {
@@ -24,6 +28,46 @@ const buttonInteractionEvent: Event = {
     if (processedInteractions.has(interactionKey)) {
       console.log(`[BUTTON] Interaction ${interactionKey} already processed, skipping`);
       return;
+    }
+
+    // ユーザー固有のボタンアクションのクールダウンチェック（特に危険な操作）
+    const isDangerousAction = interaction.customId.includes('balance_reset_all_confirm') || 
+                             interaction.customId.includes('salary_rollback_all_confirm');
+    
+    if (isDangerousAction) {
+      const userActionKey = `${interaction.user.id}_${interaction.customId.split('_').slice(0, -1).join('_')}`;
+      const lastActionTime = userButtonActions.get(userActionKey);
+      const currentTime = Date.now();
+      
+      if (lastActionTime && (currentTime - lastActionTime) < BUTTON_COOLDOWN_MS) {
+        console.log(`[BUTTON] User ${interaction.user.tag} attempted rapid clicking on dangerous action: ${interaction.customId}, blocked`);
+        
+        // 簡潔なメッセージで重複クリックを知らせる
+        try {
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content: '⏳ 処理中です。しばらくお待ちください...',
+              ephemeral: true
+            });
+          }
+        } catch (error) {
+          console.error('[BUTTON] Failed to reply to rapid click:', error);
+        }
+        return;
+      }
+      
+      // アクションタイムスタンプを記録
+      userButtonActions.set(userActionKey, currentTime);
+      
+      // 古いエントリをクリーンアップ（メモリ効率化）
+      if (userButtonActions.size > 100) {
+        const cutoffTime = currentTime - (BUTTON_COOLDOWN_MS * 5);
+        for (const [key, timestamp] of userButtonActions.entries()) {
+          if (timestamp < cutoffTime) {
+            userButtonActions.delete(key);
+          }
+        }
+      }
     }
 
     // インタラクションIDを記録
@@ -456,9 +500,31 @@ const buttonInteractionEvent: Event = {
         }
 
         // カスタムIDから金額を抽出
-        const targetAmount = parseInt(interaction.customId.replace('balance_reset_all_confirm_', ''));
+        const targetAmountStr = interaction.customId.replace('balance_reset_all_confirm_', '');
+        const targetAmount = parseInt(targetAmountStr);
+        
+        if (isNaN(targetAmount) || targetAmount < 0) {
+          console.error(`[BALANCE-RESET-ALL] Invalid target amount: ${targetAmountStr}`);
+          await interaction.reply({
+            content: '❌ 無効な金額設定です。',
+            ephemeral: true
+          });
+          return;
+        }
 
         try {
+          // まず処理中であることを通知（インタラクション処理を素早く開始）
+          const processingEmbed = new EmbedBuilder()
+            .setColor('#ffaa00')
+            .setTitle('⏳ 全員残高リセット処理を開始しています...')
+            .setDescription(`${targetAmount.toLocaleString()}Ruへのリセット処理を開始しています。\n**この処理には時間がかかる場合があります。**`)
+            .setTimestamp();
+
+          await interaction.update({
+            embeds: [processingEmbed],
+            components: []
+          });
+
           const { executeBalanceResetAll } = await import('../commands/balance-reset-all');
           await executeBalanceResetAll(interaction, targetAmount);
         } catch (error) {
@@ -467,13 +533,24 @@ const buttonInteractionEvent: Event = {
           const errorEmbed = new EmbedBuilder()
             .setColor('#ff0000')
             .setTitle('❌ エラー')
-            .setDescription('全員残高リセット処理中にエラーが発生しました。')
+            .setDescription('全員残高リセット処理中にエラーが発生しました。\n\n**詳細:**\n```\n' + (error as Error).message + '\n```')
             .setTimestamp();
 
-          await interaction.update({
-            embeds: [errorEmbed],
-            components: []
-          });
+          try {
+            if (interaction.deferred || interaction.replied) {
+              await interaction.editReply({
+                embeds: [errorEmbed],
+                components: []
+              });
+            } else {
+              await interaction.update({
+                embeds: [errorEmbed],
+                components: []
+              });
+            }
+          } catch (replyError) {
+            console.error('[BALANCE-RESET-ALL] Failed to send error reply:', replyError);
+          }
         }
         return;
       }
