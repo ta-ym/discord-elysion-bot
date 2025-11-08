@@ -10,7 +10,15 @@ import {
 import { Database } from '../database';
 import { checkCommandPermission } from '../utils/permissions';
 
-const database = new Database();
+// データベースインスタンスを遅延初期化
+let database: Database | null = null;
+
+function getDatabase(): Database {
+  if (!database) {
+    database = new Database();
+  }
+  return database;
+}
 
 export const data = new SlashCommandBuilder()
   .setName('balance-reset-all')
@@ -36,6 +44,9 @@ export async function execute(interaction: CommandInteraction) {
     return; // 権限なし
   }
 
+  // インタラクションを先にdeferして15分の時間制限を確保
+  await interaction.deferReply({ ephemeral: true });
+
   try {
     const confirmation = interaction.options.getString('confirmation');
     const targetAmount = interaction.options.getInteger('amount') ?? 10000;
@@ -48,7 +59,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('この超危険な操作を実行するには、確認用フィールドに `RESET_ALL_BALANCES_TO_10000` と正確に入力してください。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
@@ -67,7 +78,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('ユーザーデータの取得中にエラーが発生しました。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
@@ -78,7 +89,7 @@ export async function execute(interaction: CommandInteraction) {
         .setDescription('残高を変更するユーザーが見つかりませんでした。')
         .setTimestamp();
 
-      await interaction.reply({ embeds: [noUsersEmbed], flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ embeds: [noUsersEmbed] });
       return;
     }
 
@@ -143,10 +154,9 @@ export async function execute(interaction: CommandInteraction) {
           .setStyle(ButtonStyle.Secondary)
       );
 
-    await interaction.reply({ 
+    await interaction.editReply({ 
       embeds: [confirmEmbed], 
-      components: [confirmRow],
-      flags: MessageFlags.Ephemeral 
+      components: [confirmRow]
     });
 
   } catch (error) {
@@ -158,10 +168,16 @@ export async function execute(interaction: CommandInteraction) {
       .setDescription('コマンドの実行中にエラーが発生しました。')
       .setTimestamp();
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
-    } else {
-      await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+    try {
+      if (interaction.deferred && !interaction.replied) {
+        await interaction.editReply({ embeds: [errorEmbed] });
+      } else if (!interaction.replied) {
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      } else {
+        await interaction.followUp({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+      }
+    } catch (replyError) {
+      console.error('Failed to send error message:', replyError);
     }
   }
 }
@@ -202,66 +218,77 @@ async function getExistingUsers(): Promise<any[]> {
   try {
     console.log('[BALANCE-RESET-ALL] Fetching existing users from database...');
     
-    // PostgreSQLが利用可能かチェック
-    const usePostgreSQL = (database as any).usePostgreSQL;
-    console.log(`[BALANCE-RESET-ALL] Database mode: ${usePostgreSQL ? 'PostgreSQL' : 'SQLite'}`);
+    const db = getDatabase();
     
-    if (usePostgreSQL) {
-      // PostgreSQLから全ユーザーを取得
-      console.log('[BALANCE-RESET-ALL] Using PostgreSQL to fetch users');
-      const postgresDb = (database as any).pgDb;
+    // Databaseインスタンスの構造をチェック
+    console.log('[BALANCE-RESET-ALL] Database instance keys:', Object.keys(db));
+    
+    // まずSQLiteを直接試す（より確実）
+    try {
+      console.log('[BALANCE-RESET-ALL] Attempting to fetch users via database.getUser method');
       
-      if (!postgresDb) {
-        console.error('[BALANCE-RESET-ALL] PostgreSQL instance not found');
+      // 単純にSQLiteから全ユーザーを取得
+      const dbInstance = (db as any).db;
+      
+      if (!dbInstance) {
+        console.error('[BALANCE-RESET-ALL] SQLite database instance not found');
         return [];
       }
-      
-      try {
-        const users = await postgresDb.getAllUsers();
-        console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} existing users`);
-        return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance }));
-      } catch (pgError) {
-        console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
-        console.log('[BALANCE-RESET-ALL] Falling back to SQLite...');
-      }
-    }
-    
-    // SQLiteフォールバック
-    console.log('[BALANCE-RESET-ALL] Using SQLite to fetch users');
-    const dbInstance = (database as any).sqlite || (database as any).db;
-    
-    if (!dbInstance) {
-      console.error('[BALANCE-RESET-ALL] SQLite database instance not found');
-      return [];
-    }
 
-    return new Promise((resolve, reject) => {
-      // テーブルの存在確認
-      dbInstance.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err: any, row: any) => {
-        if (err) {
-          console.error('[BALANCE-RESET-ALL] Error checking table existence:', err);
-          reject(err);
-          return;
-        }
-        
-        if (!row) {
-          console.log('[BALANCE-RESET-ALL] Users table does not exist, returning empty array');
-          resolve([]);
-          return;
-        }
-
-        // ユーザーデータを取得
-        dbInstance.all('SELECT discord_id, balance FROM users', [], (err: any, rows: any[]) => {
+      return new Promise((resolve, reject) => {
+        // テーブルの存在確認
+        dbInstance.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err: any, row: any) => {
           if (err) {
-            console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
+            console.error('[BALANCE-RESET-ALL] Error checking table existence:', err);
             reject(err);
-          } else {
-            console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} existing users`);
-            resolve(rows || []);
+            return;
           }
+          
+          if (!row) {
+            console.log('[BALANCE-RESET-ALL] Users table does not exist, returning empty array');
+            resolve([]);
+            return;
+          }
+
+          // ユーザーデータを取得
+          dbInstance.all('SELECT discord_id, balance FROM users', [], (err: any, rows: any[]) => {
+            if (err) {
+              console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
+              reject(err);
+            } else {
+              console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} existing users`);
+              resolve(rows || []);
+            }
+          });
         });
       });
-    });
+      
+    } catch (directError) {
+      console.error('[BALANCE-RESET-ALL] Direct SQLite access failed:', directError);
+      
+      // PostgreSQLを試す
+      try {
+        const usePostgreSQL = (db as any).usePostgreSQL;
+        console.log(`[BALANCE-RESET-ALL] Database mode: ${usePostgreSQL ? 'PostgreSQL' : 'SQLite'}`);
+        
+        if (usePostgreSQL) {
+          const postgresDb = (db as any).pgDb;
+          
+          if (postgresDb && typeof postgresDb.getAllUsers === 'function') {
+            console.log('[BALANCE-RESET-ALL] Using PostgreSQL to fetch users');
+            const users = await postgresDb.getAllUsers();
+            console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} existing users`);
+            return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance }));
+          }
+        }
+      } catch (pgError) {
+        console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
+      }
+      
+      // 最後の手段：空配列を返す
+      console.log('[BALANCE-RESET-ALL] All database access methods failed, returning empty array');
+      return [];
+    }
   } catch (error) {
     console.error('[BALANCE-RESET-ALL] Error in getExistingUsers:', error);
     return [];
@@ -302,6 +329,8 @@ async function getAllUsers(interaction: CommandInteraction): Promise<any[]> {
 
 // 全員残高リセット実行関数
 export async function executeBalanceResetAll(interaction: any, targetAmount: number) {
+  const db = getDatabase();
+  
   try {
     // 再度全ユーザーを取得
     const allUsers = await getAllUsers(interaction);
@@ -338,8 +367,24 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         const oldBalance = user.balance || 0;
         totalOldBalance += oldBalance;
         
-        // 残高を設定（存在しない場合は作成）
-        await database.setUserBalance(user.discord_id, targetAmount);
+        // まず既存ユーザーかチェック
+        if (user.isNewUser) {
+          // 新規ユーザーの場合、まず作成
+          try {
+            await db.createUser(user.discord_id);
+            console.log(`[BALANCE RESET ALL] Created new user: ${user.discord_id} (${user.displayName})`);
+          } catch (createError: any) {
+            if (createError.message && createError.message.includes('UNIQUE constraint failed')) {
+              // すでに存在する場合は無視
+              console.log(`[BALANCE RESET ALL] User already exists: ${user.discord_id}`);
+            } else {
+              throw createError;
+            }
+          }
+        }
+        
+        // 残高を設定
+        await db.setUserBalance(user.discord_id, targetAmount);
         
         totalNewBalance += targetAmount;
         successCount++;
@@ -350,6 +395,11 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         
       } catch (error) {
         console.error(`[BALANCE RESET ALL ERROR] User ${user.discord_id} (${user.displayName}):`, error);
+        console.error(`[BALANCE RESET ALL ERROR] Error details:`, {
+          name: (error as Error).name,
+          message: (error as Error).message,
+          stack: (error as Error).stack
+        });
         errorCount++;
         errorUsers.push(`<@${user.discord_id}>`);
       }
