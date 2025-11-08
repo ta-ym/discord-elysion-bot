@@ -182,7 +182,7 @@ export async function execute(interaction: CommandInteraction) {
   }
 }
 
-// Discordサーバーの全メンバーを取得するヘルパー関数
+// Discordサーバーの全メンバーを取得するヘルパー関数（タイムアウト対応）
 async function getAllServerMembers(interaction: CommandInteraction): Promise<any[]> {
   try {
     console.log('[BALANCE-RESET-ALL] Fetching all server members...');
@@ -192,9 +192,42 @@ async function getAllServerMembers(interaction: CommandInteraction): Promise<any
       return [];
     }
 
-    // サーバーの全メンバーを取得
     const guild = interaction.guild;
-    await guild.members.fetch(); // 全メンバーを取得
+    
+    // タイムアウト付きでメンバーを取得（分割取得）
+    try {
+      console.log('[BALANCE-RESET-ALL] Starting guild member fetch with timeout...');
+      
+      // タイムアウト処理付きの分割取得
+      await Promise.race([
+        guild.members.fetch({ limit: 1000, time: 30000 }), // 30秒タイムアウト、最大1000人ずつ
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Guild member fetch timeout after 30 seconds')), 30000)
+        )
+      ]);
+
+      console.log(`[BALANCE-RESET-ALL] Successfully fetched ${guild.members.cache.size} members`);
+    } catch (fetchError) {
+      console.warn('[BALANCE-RESET-ALL] Member fetch failed, trying alternative approach:', fetchError);
+      
+      // 最後の手段：既存のキャッシュを使用し、それも無い場合は部分的なフェッチを試行
+      if (guild.members.cache.size === 0) {
+        try {
+          console.log('[BALANCE-RESET-ALL] Attempting partial member fetch...');
+          // より小さな制限でフェッチを試行
+          await guild.members.fetch({ limit: 100, time: 10000 });
+        } catch (partialError) {
+          console.error('[BALANCE-RESET-ALL] Partial fetch also failed:', partialError);
+          // それでも失敗した場合は空配列を返す
+          if (guild.members.cache.size === 0) {
+            console.error('[BALANCE-RESET-ALL] No members available, cannot proceed');
+            return [];
+          }
+        }
+      }
+      
+      console.log(`[BALANCE-RESET-ALL] Using ${guild.members.cache.size} cached members`);
+    }
     
     const allMembers = guild.members.cache
       .filter(member => !member.user.bot) // ボットを除外
@@ -287,7 +320,16 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       .setDescription('同じ操作が既に実行中です。完了をお待ちください。')
       .setTimestamp();
 
-    await interaction.update({ embeds: [busyEmbed], components: [] });
+    // インタラクション状態をチェックしてから適切な方法で応答
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ embeds: [busyEmbed], components: [] });
+      } else {
+        await interaction.update({ embeds: [busyEmbed], components: [] });
+      }
+    } catch (replyError) {
+      console.error('[BALANCE-RESET-ALL] Failed to send busy message:', replyError);
+    }
     return;
   }
   
@@ -305,7 +347,16 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
         .setDescription('リセット対象のユーザーが見つかりませんでした。')
         .setTimestamp();
 
-      await interaction.update({ embeds: [errorEmbed], components: [] });
+      // インタラクション状態をチェックしてから適切な方法で応答
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply({ embeds: [errorEmbed], components: [] });
+        } else {
+          await interaction.update({ embeds: [errorEmbed], components: [] });
+        }
+      } catch (replyError) {
+        console.error('[BALANCE-RESET-ALL] Failed to send error message:', replyError);
+      }
       return;
     }
 
@@ -322,7 +373,17 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       )
       .setTimestamp();
 
-    await interaction.editReply({ embeds: [progressEmbed], components: [] });
+    // インタラクション状態をチェックしてから適切な方法で応答
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ embeds: [progressEmbed], components: [] });
+      } else {
+        await interaction.update({ embeds: [progressEmbed], components: [] });
+      }
+    } catch (replyError) {
+      console.error('[BALANCE-RESET-ALL] Failed to send progress message:', replyError);
+      // プログレス表示に失敗しても処理は継続
+    }
 
     let successCount = 0;
     let errorCount = 0;
@@ -405,7 +466,10 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
               )
               .setTimestamp();
 
-            await interaction.editReply({ embeds: [progressEmbed], components: [] });
+            // インタラクション状態を再確認してから更新
+            if (interaction.replied || interaction.deferred) {
+              await interaction.editReply({ embeds: [progressEmbed], components: [] });
+            }
           } catch (updateError) {
             console.warn('[BALANCE-RESET-ALL] Failed to update progress:', updateError);
           }
@@ -451,7 +515,16 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       inline: false
     });
 
-    await interaction.editReply({ embeds: [resultEmbed], components: [] });
+    // 最終結果を安全に送信
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ embeds: [resultEmbed], components: [] });
+      } else {
+        await interaction.update({ embeds: [resultEmbed], components: [] });
+      }
+    } catch (resultError) {
+      console.error('[BALANCE-RESET-ALL] Failed to send result:', resultError);
+    }
 
   } catch (error) {
     console.error('Execute balance reset all error:', error);
@@ -462,7 +535,16 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
       .setDescription('リセット処理中にエラーが発生しました。\n管理者に連絡してください。')
       .setTimestamp();
 
-    await interaction.editReply({ embeds: [errorEmbed], components: [] });
+    // エラーメッセージも安全に送信
+    try {
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply({ embeds: [errorEmbed], components: [] });
+      } else {
+        await interaction.update({ embeds: [errorEmbed], components: [] });
+      }
+    } catch (errorReplyError) {
+      console.error('[BALANCE-RESET-ALL] Failed to send error message:', errorReplyError);
+    }
   } finally {
     // 操作完了を記録（成功・エラーに関わらず）
     activeResetOperations.delete(operationKey);
