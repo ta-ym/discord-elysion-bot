@@ -953,9 +953,111 @@ const buttonInteractionEvent: Event = {
 
         const targetMonth = interaction.customId.replace('salary_bulk_execute_', '');
         
-        await interaction.reply({
-          content: `⚠️ プレビュー後の実行機能は現在開発中です。\n\n実際の給与支給を行いたい場合は、以下のコマンドを実行してください：\n\`/salary-bulk month:${targetMonth}\``,
-          ephemeral: true
+        try {
+          // 確認メッセージを表示
+          const confirmEmbed = new EmbedBuilder()
+            .setColor('#ff6600')
+            .setTitle('⚠️ 給与一斉支給の実行確認')
+            .setDescription(`**${targetMonth}** の給与一斉支給を実行しますか？\n\n**この操作は取り消すことができません。**`)
+            .addFields(
+              { name: '📅 対象月', value: targetMonth, inline: true },
+              { name: '👨‍💼 実行者', value: `${interaction.user.displayName}`, inline: true },
+              { name: '⚠️ 重要な注意', value: 
+                '• 実行後は取り消しができません\n' +
+                '• 既に支給済みのユーザーはスキップされます\n' +
+                '• 処理には時間がかかる場合があります', inline: false }
+            )
+            .setFooter({ text: '本当に実行してよろしいですか？' })
+            .setTimestamp();
+
+          const confirmRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(`salary_bulk_confirm_${targetMonth}`)
+                .setLabel('🚀 実行する')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('💰'),
+              new ButtonBuilder()
+                .setCustomId('salary_bulk_cancel')
+                .setLabel('❌ キャンセル')
+                .setStyle(ButtonStyle.Secondary)
+            );
+
+          await interaction.reply({
+            embeds: [confirmEmbed],
+            components: [confirmRow],
+            ephemeral: true
+          });
+          
+        } catch (error) {
+          console.error('[SALARY-BULK-EXECUTE] Error showing confirmation:', error);
+          await interaction.reply({
+            content: '❌ 確認画面の表示中にエラーが発生しました。',
+            ephemeral: true
+          });
+        }
+        return;
+      }
+
+      // Salary Bulk Confirm ボタン処理（実行確認後）
+      if (interaction.customId.startsWith('salary_bulk_confirm_')) {
+        console.log(`[SALARY-BULK-CONFIRM] Processing confirmation by ${interaction.user.tag}`);
+        
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-BULK-CONFIRM] Confirm interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+
+        const targetMonth = interaction.customId.replace('salary_bulk_confirm_', '');
+        
+        try {
+          // 実際の実行処理を呼び出し
+          const { executeSalaryBulkFromPreview } = await import('../commands/salary-bulk');
+          await executeSalaryBulkFromPreview(interaction, targetMonth);
+        } catch (error) {
+          console.error('[SALARY-BULK-CONFIRM] Error executing salary bulk:', error);
+          
+          const errorEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ 実行エラー')
+            .setDescription('給与一斉支給の実行中にエラーが発生しました。')
+            .setTimestamp();
+
+          try {
+            if (interaction.deferred || interaction.replied) {
+              await interaction.editReply({
+                embeds: [errorEmbed],
+                components: []
+              });
+            } else {
+              await interaction.update({
+                embeds: [errorEmbed],
+                components: []
+              });
+            }
+          } catch (replyError) {
+            console.error('[SALARY-BULK-CONFIRM] Failed to send error reply:', replyError);
+          }
+        }
+        return;
+      }
+
+      // Salary Bulk Cancel ボタン処理
+      if (interaction.customId === 'salary_bulk_cancel') {
+        if (interaction.replied || interaction.deferred) {
+          console.log(`[SALARY-BULK-CANCEL] Cancel interaction already processed for ${interaction.user.tag}`);
+          return;
+        }
+        
+        const cancelEmbed = new EmbedBuilder()
+          .setColor('#999999')
+          .setTitle('❌ 給与一斉支給をキャンセルしました')
+          .setDescription('給与一斉支給の実行はキャンセルされました。')
+          .setTimestamp();
+        
+        await interaction.update({
+          embeds: [cancelEmbed],
+          components: []
         });
         return;
       }

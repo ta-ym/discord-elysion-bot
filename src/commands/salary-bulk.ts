@@ -189,7 +189,7 @@ async function showPreviewResults(
       .addComponents(
         new ButtonBuilder()
           .setCustomId(`salary_bulk_execute_${targetMonth}`)
-          .setLabel('⚡ 実際の給与支給を実行')
+          .setLabel(`🚀 ${summary.eligibleUsers}人に給与支給を実行`)
           .setStyle(ButtonStyle.Danger)
           .setEmoji('💰')
       );
@@ -434,5 +434,281 @@ const salaryBulkCommand: Command = {
     }
   },
 };
+
+// プレビュー後の実行関数
+export async function executeSalaryBulkFromPreview(
+  interaction: any,
+  targetMonth: string
+): Promise<void> {
+  try {
+    console.log(`[SALARY-BULK-EXECUTE] Starting execution for month ${targetMonth} by ${interaction.user.tag}`);
+
+    // データベース接続確認
+    const database = new Database();
+
+    // 権限チェック
+    if (!(await hasSalaryPermission(interaction.user.id))) {
+      const permissionErrorEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ 権限エラー')
+        .setDescription(getSalaryPermissionErrorMessage())
+        .setTimestamp();
+
+      await interaction.update({
+        embeds: [permissionErrorEmbed],
+        components: []
+      });
+      return;
+    }
+
+    // アクティブな給与ロール設定を取得
+    const activeSalaryRoles = getActiveSalaryRoles();
+    
+    if (activeSalaryRoles.length === 0) {
+      const noRolesEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ 設定エラー')
+        .setDescription('アクティブな給与ロール設定が見つかりません。')
+        .setTimestamp();
+
+      await interaction.update({
+        embeds: [noRolesEmbed],
+        components: []
+      });
+      return;
+    }
+
+    // サーバー情報取得
+    const guild = interaction.guild;
+    if (!guild) {
+      const noGuildEmbed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('❌ サーバーエラー')
+        .setDescription('サーバー情報の取得に失敗しました。')
+        .setTimestamp();
+
+      await interaction.update({
+        embeds: [noGuildEmbed],
+        components: []
+      });
+      return;
+    }
+
+    // 処理開始の通知
+    const startEmbed = new EmbedBuilder()
+      .setColor('#ffaa00')
+      .setTitle('⏳ 給与一斉支給を開始しています...')
+      .setDescription(`**${targetMonth}** の給与支給処理を開始しました。\n\n**この処理には時間がかかる場合があります。**`)
+      .addFields(
+        { name: '📊 対象月', value: targetMonth, inline: true },
+        { name: '👨‍💼 実行者', value: `<@${interaction.user.id}>`, inline: true },
+        { name: '⚠️ 重要', value: '処理中はブラウザを閉じずにお待ちください。', inline: false }
+      )
+      .setTimestamp();
+
+    await interaction.update({
+      embeds: [startEmbed],
+      components: []
+    });
+
+    // 全メンバーを取得
+    await guild.members.fetch();
+
+    // 全ユーザーの給与情報を再分析
+    const allUserAnalysis = await analyzeAllUsers(guild, database, targetMonth);
+    
+    console.log(`[SALARY-BULK-EXECUTE] Analysis complete: ${allUserAnalysis.summary.eligibleUsers} eligible users`);
+
+    if (allUserAnalysis.summary.eligibleUsers === 0) {
+      const noEligibleEmbed = new EmbedBuilder()
+        .setColor('#ffaa00')
+        .setTitle('⚠️ 支給対象なし')
+        .setDescription(`**${targetMonth}** に支給可能なユーザーが見つかりませんでした。`)
+        .addFields(
+          { name: '📊 分析結果', value: 
+            `総ユーザー数: ${allUserAnalysis.summary.totalUsers}人\n` +
+            `既支給済み: ${allUserAnalysis.summary.alreadyPaidUsers}人\n` +
+            `エラー: ${allUserAnalysis.summary.errorUsers}人`, inline: false }
+        )
+        .setTimestamp();
+
+      await interaction.editReply({
+        embeds: [noEligibleEmbed],
+        components: []
+      });
+      return;
+    }
+
+    // 実際の給与支給処理を実行
+    let totalProcessed = 0;
+    let totalSuccess = 0;
+    let totalSkipped = allUserAnalysis.summary.alreadyPaidUsers;
+    let totalErrors = 0;
+    let totalAmount = 0;
+    const startTime = Date.now();
+
+    // 進捗更新間隔
+    const updateProgressEvery = Math.max(10, Math.floor(allUserAnalysis.summary.eligibleUsers / 10));
+
+    for (let i = 0; i < allUserAnalysis.users.length; i++) {
+      const userAnalysis = allUserAnalysis.users[i];
+      
+      if (!userAnalysis.canReceive) {
+        continue;
+      }
+
+      totalProcessed++;
+      
+      try {
+        console.log(`[SALARY-BULK-EXECUTE] Processing user: ${userAnalysis.username} (${userAnalysis.userId})`);
+        
+        const roleNames = userAnalysis.roles.map(role => getRoleDisplayName(role.roleId)).join(', ');
+        
+        const salarySuccess = await database.payMonthlySalary(
+          userAnalysis.userId,
+          userAnalysis.primaryRole!.roleId,
+          userAnalysis.totalSalary,
+          interaction.user.id,
+          `一斉給与支給 - 複数ロール合算 [${roleNames}]`
+        );
+
+        if (!salarySuccess) {
+          throw new Error(`給与支給処理に失敗しました`);
+        }
+
+        // 個別DM送信（バックグラウンド）
+        const member = guild.members.cache.get(userAnalysis.userId);
+        if (member) {
+          sendSalaryBreakdownDM(member.user, {
+            totalSalary: userAnalysis.totalSalary,
+            roles: userAnalysis.roles,
+            primaryRole: userAnalysis.primaryRole
+          }, targetMonth).catch(dmError => {
+            console.warn(`[SALARY-BULK-EXECUTE] Failed to send DM to ${userAnalysis.username}:`, dmError);
+          });
+        }
+
+        totalSuccess++;
+        totalAmount += userAnalysis.totalSalary;
+
+      } catch (error) {
+        console.error(`[SALARY-BULK-EXECUTE] Error processing salary for user ${userAnalysis.username} (${userAnalysis.userId}):`, error);
+        totalErrors++;
+      }
+
+      // 進捗更新
+      if (totalProcessed % updateProgressEvery === 0 || totalProcessed === allUserAnalysis.summary.eligibleUsers) {
+        const progressPercent = Math.round((totalProcessed / allUserAnalysis.summary.eligibleUsers) * 100);
+        const elapsedTime = Math.round((Date.now() - startTime) / 1000);
+        const estimatedTotal = Math.round((elapsedTime / totalProcessed) * allUserAnalysis.summary.eligibleUsers);
+        const remainingTime = Math.max(0, estimatedTotal - elapsedTime);
+
+        const progressEmbed = new EmbedBuilder()
+          .setColor('#ffaa00')
+          .setTitle('⏳ 給与一斉支給実行中...')
+          .setDescription(`進捗: ${totalProcessed}/${allUserAnalysis.summary.eligibleUsers} (${progressPercent}%)`)
+          .addFields(
+            { name: '✅ 成功', value: `${totalSuccess}人`, inline: true },
+            { name: '❌ エラー', value: `${totalErrors}人`, inline: true },
+            { name: '⏱️ 残り時間', value: `約${remainingTime}秒`, inline: true },
+            { name: '💰 支給総額', value: `${totalAmount.toLocaleString()} Ru`, inline: true }
+          )
+          .setTimestamp();
+
+        try {
+          await interaction.editReply({ embeds: [progressEmbed], components: [] });
+        } catch (updateError) {
+          console.warn('[SALARY-BULK-EXECUTE] Failed to update progress:', updateError);
+        }
+      }
+    }
+
+    // 最終結果表示
+    const resultEmbed = new EmbedBuilder()
+      .setColor(totalErrors > 0 ? '#ffaa00' : '#00ff00')
+      .setTitle(totalErrors > 0 ? '⚠️ 給与一斉支給完了（一部エラー）' : '✅ 給与一斉支給完了')
+      .setDescription(`**${targetMonth}** の給与支給が完了しました。`)
+      .addFields(
+        { name: '📊 処理結果', value: 
+          `処理済み: ${totalProcessed}人\n` +
+          `成功: ${totalSuccess}人\n` +
+          `エラー: ${totalErrors}人\n` +
+          `スキップ: ${totalSkipped}人`, inline: true },
+        { name: '💰 支給統計', value: 
+          `総支給額: **${totalAmount.toLocaleString()} Ru**\n` +
+          `平均支給額: **${totalSuccess > 0 ? Math.round(totalAmount / totalSuccess).toLocaleString() : 0} Ru**`, inline: true },
+        { name: '⏱️ 処理時間', value: 
+          `${Math.round((Date.now() - startTime) / 1000)}秒`, inline: true }
+      )
+      .setFooter({ 
+        text: `実行者: ${interaction.user.displayName} | 処理完了時刻` 
+      })
+      .setTimestamp();
+
+    // 詳細ボタンを追加
+    const detailsRow = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('salary_bulk_details')
+          .setLabel('📋 詳細結果を表示')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('📊'),
+        new ButtonBuilder()
+          .setCustomId('salary_bulk_summary')
+          .setLabel('📈 計算サマリー')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🔍')
+      );
+
+    await interaction.editReply({
+      embeds: [resultEmbed],
+      components: [detailsRow]
+    });
+
+    // 結果をデータベースに保存（詳細表示用）
+    try {
+      const bulkResults = allUserAnalysis.users
+        .filter(user => user.canReceive)
+        .map(user => ({
+          userId: user.userId,
+          status: 'success' as const,
+          amount: user.totalSalary,
+          reason: `ロール: ${user.roles.map(r => getRoleDisplayName(r.roleId)).join(', ')}`
+        }));
+
+      // PostgreSQL経由でBulk結果を保存
+      const pgDb = (database as any).pgDb;
+      if (pgDb && typeof pgDb.saveBulkSalaryResults === 'function') {
+        await pgDb.saveBulkSalaryResults(bulkResults, interaction.user.id);
+      }
+    } catch (saveError) {
+      console.warn('[SALARY-BULK-EXECUTE] Failed to save bulk results:', saveError);
+    }
+
+    console.log(`[SALARY-BULK-EXECUTE] Execution completed: ${totalSuccess}/${totalProcessed} successful, ${totalAmount} Ru total`);
+
+  } catch (error) {
+    console.error('[SALARY-BULK-EXECUTE] Execution error:', error);
+    
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ 給与支給実行エラー')
+      .setDescription('給与一斉支給の実行中にエラーが発生しました。')
+      .addFields(
+        { name: '🔍 エラー詳細', value: `\`\`\`\n${(error as Error).message}\n\`\`\``, inline: false },
+        { name: '🛠️ 対処方法', value: '管理者に連絡するか、しばらく時間を置いてから再度お試しください。', inline: false }
+      )
+      .setTimestamp();
+
+    try {
+      await interaction.editReply({
+        embeds: [errorEmbed],
+        components: []
+      });
+    } catch (replyError) {
+      console.error('[SALARY-BULK-EXECUTE] Failed to send error reply:', replyError);
+    }
+  }
+}
 
 export default salaryBulkCommand;
