@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, User } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, User, ButtonInteraction } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
 import { getActiveSalaryRoles, getRoleDisplayName, getTotalSalaryByRoleIds, SalaryRoleConfig } from '../config/salaryRoles';
@@ -437,24 +437,28 @@ const salaryBulkCommand: Command = {
 
 // プレビュー後の実行関数
 export async function executeSalaryBulkFromPreview(
-  interaction: any,
+  interaction: ButtonInteraction,
   targetMonth: string
 ): Promise<void> {
   try {
     console.log(`[SALARY-BULK-EXECUTE] Starting execution for month ${targetMonth} by ${interaction.user.tag}`);
 
+    // 最初にdefer updateで応答を準備（実際の更新は後で行う）
+    await interaction.deferUpdate();
+
     // データベース接続確認
     const database = new Database();
 
     // 権限チェック
-    if (!(await hasSalaryPermission(interaction.user.id))) {
+    const member = interaction.member as GuildMember | null;
+    if (!member || !hasSalaryPermission(member)) {
       const permissionErrorEmbed = new EmbedBuilder()
         .setColor('#ff0000')
         .setTitle('❌ 権限エラー')
         .setDescription(getSalaryPermissionErrorMessage())
         .setTimestamp();
 
-      await interaction.update({
+      await interaction.editReply({
         embeds: [permissionErrorEmbed],
         components: []
       });
@@ -471,7 +475,7 @@ export async function executeSalaryBulkFromPreview(
         .setDescription('アクティブな給与ロール設定が見つかりません。')
         .setTimestamp();
 
-      await interaction.update({
+      await interaction.editReply({
         embeds: [noRolesEmbed],
         components: []
       });
@@ -487,7 +491,7 @@ export async function executeSalaryBulkFromPreview(
         .setDescription('サーバー情報の取得に失敗しました。')
         .setTimestamp();
 
-      await interaction.update({
+      await interaction.editReply({
         embeds: [noGuildEmbed],
         components: []
       });
@@ -506,7 +510,7 @@ export async function executeSalaryBulkFromPreview(
       )
       .setTimestamp();
 
-    await interaction.update({
+    await interaction.editReply({
       embeds: [startEmbed],
       components: []
     });
