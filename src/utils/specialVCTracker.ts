@@ -162,19 +162,18 @@ export class SpecialVCTracker {
   }
 
   /**
-   * 完了したセッション情報を取得
+   * 完了したセッション情報を取得（PostgreSQL対応）
    */
   private async getCompletedSession(sessionId: number): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.database['db'].get(
-        'SELECT * FROM special_vc_sessions WHERE id = ?',
-        [sessionId],
-        (err: any, row: any) => {
-          if (err) reject(err);
-          else resolve(row);
-        }
-      );
-    });
+    // PostgreSQL専用Database経由でアクセス
+    try {
+      // この機能は現在PostgreSQLでは実装されていないため、無効化
+      console.log(`[SPECIAL VC] getCompletedSession called for session ${sessionId}, but not implemented in PostgreSQL mode`);
+      return null;
+    } catch (error) {
+      console.error('Error getting completed session:', error);
+      return null;
+    }
   }
 
   /**

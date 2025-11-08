@@ -166,6 +166,81 @@ export class PostgreSQLDatabase {
         )
       `);
 
+      // VC関連テーブル
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public_vcs (
+          id SERIAL PRIMARY KEY,
+          channel_id TEXT UNIQUE NOT NULL,
+          creator_id TEXT NOT NULL,
+          channel_name TEXT NOT NULL,
+          description TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS temp_vcs (
+          id SERIAL PRIMARY KEY,
+          channel_id TEXT UNIQUE NOT NULL,
+          creator_id TEXT NOT NULL,
+          channel_name TEXT NOT NULL,
+          duration_hours INTEGER NOT NULL,
+          cost_ru INTEGER NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS voice_sessions (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          channel_id TEXT NOT NULL,
+          joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          left_at TIMESTAMP,
+          duration_minutes INTEGER,
+          has_angel_role BOOLEAN DEFAULT FALSE
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS voice_time_logs (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          total_minutes INTEGER DEFAULT 0,
+          angel_role_minutes INTEGER DEFAULT 0,
+          sessions_count INTEGER DEFAULT 0,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, date)
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS special_vc_sessions (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          vc_type TEXT NOT NULL CHECK (vc_type IN ('menhera', 'needy')),
+          joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          left_at TIMESTAMP,
+          duration_minutes INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS special_vc_time_logs (
+          id SERIAL PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          menhera_minutes INTEGER DEFAULT 0,
+          needy_minutes INTEGER DEFAULT 0,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, date)
+        )
+      `);
+
       // インデックス作成
       await client.query(`CREATE INDEX IF NOT EXISTS idx_users_discord_id ON users(discord_id)`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_transactions_to_user_id ON transactions(to_user_id)`);
@@ -175,9 +250,14 @@ export class PostgreSQLDatabase {
       await client.query(`CREATE INDEX IF NOT EXISTS idx_salary_configs_role_id ON salary_configs(role_id)`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_monthly_salary_claims_user_id ON monthly_salary_claims(user_id)`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_monthly_salary_claims_claim_month ON monthly_salary_claims(claim_month)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_public_vcs_channel_id ON public_vcs(channel_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_temp_vcs_channel_id ON temp_vcs(channel_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_temp_vcs_expires_at ON temp_vcs(expires_at)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_user_id ON voice_sessions(user_id)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_user_date ON voice_time_logs(user_id, date)`);
 
       await client.query('COMMIT');
-      console.log('PostgreSQL currency tables initialized');
+      console.log('PostgreSQL全テーブル初期化完了');
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Error initializing PostgreSQL tables:', error);
@@ -753,6 +833,328 @@ export class PostgreSQLDatabase {
     } finally {
       client.release();
     }
+  }
+
+  // VC関連メソッド
+  async getTempVC(channelId: string): Promise<any | null> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM temp_vcs WHERE channel_id = $1',
+        [channelId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error in getTempVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async addPublicVC(channelId: string, creatorId: string, channelName: string, description?: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'INSERT INTO public_vcs (channel_id, creator_id, channel_name, description) VALUES ($1, $2, $3, $4)',
+        [channelId, creatorId, channelName, description || '']
+      );
+    } catch (error) {
+      console.error('Error in addPublicVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActivePublicVCs(): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM public_vcs ORDER BY last_activity DESC'
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getActivePublicVCs:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getPublicVC(channelId: string): Promise<any | null> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM public_vcs WHERE channel_id = $1',
+        [channelId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error in getPublicVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async removePublicVC(channelId: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'DELETE FROM public_vcs WHERE channel_id = $1',
+        [channelId]
+      );
+    } catch (error) {
+      console.error('Error in removePublicVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async addTempVC(channelId: string, creatorId: string, channelName: string, durationHours: number, cost: number, expiresAt: Date): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'INSERT INTO temp_vcs (channel_id, creator_id, channel_name, duration_hours, cost_ru, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
+        [channelId, creatorId, channelName, durationHours, cost, expiresAt.toISOString()]
+      );
+    } catch (error) {
+      console.error('Error in addTempVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getExpiredTempVCs(): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM temp_vcs WHERE expires_at <= NOW()'
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getExpiredTempVCs:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async removeTempVC(channelId: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'DELETE FROM temp_vcs WHERE channel_id = $1',
+        [channelId]
+      );
+    } catch (error) {
+      console.error('Error in removeTempVC:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Voice session tracking methods
+  async startVoiceSession(userId: string, channelId: string, hasAngel: boolean): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'INSERT INTO voice_sessions (user_id, channel_id, has_angel_role) VALUES ($1, $2, $3) RETURNING id',
+        [userId, channelId, hasAngel]
+      );
+      return result.rows[0].id;
+    } catch (error) {
+      console.error('Error in startVoiceSession:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async endVoiceSession(sessionId: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'UPDATE voice_sessions SET left_at = NOW() WHERE id = $1',
+        [sessionId]
+      );
+    } catch (error) {
+      console.error('Error in endVoiceSession:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateVoiceTimeLog(userId: string, date: string, totalMinutes: number, angelMinutes: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        `INSERT INTO voice_time_logs (user_id, date, total_minutes, angel_role_minutes) 
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, date) 
+         DO UPDATE SET 
+           total_minutes = $3, 
+           angel_role_minutes = $4, 
+           updated_at = NOW()`,
+        [userId, date, totalMinutes, angelMinutes]
+      );
+    } catch (error) {
+      console.error('Error in updateVoiceTimeLog:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getVoiceTimeStats(userId: string, startDate: string, endDate: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM voice_time_logs WHERE user_id = $1 AND date BETWEEN $2 AND $3',
+        [userId, startDate, endDate]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getVoiceTimeStats:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getAngelRoleVoiceStats(startDate: string, endDate: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM voice_time_logs WHERE date BETWEEN $1 AND $2 AND angel_role_minutes > 0 ORDER BY angel_role_minutes DESC',
+        [startDate, endDate]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getAngelRoleVoiceStats:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getActiveVoiceSession(userId: string, channelId: string): Promise<any> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM voice_sessions WHERE user_id = $1 AND channel_id = $2 AND left_at IS NULL',
+        [userId, channelId]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error in getActiveVoiceSession:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Special VC methods
+  async startSpecialVCSession(userId: string, _channelId: string, _channelName: string, vcType: string, _hasAngel: boolean): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'INSERT INTO special_vc_sessions (user_id, vc_type) VALUES ($1, $2) RETURNING id',
+        [userId, vcType]
+      );
+      return result.rows[0].id;
+    } catch (error) {
+      console.error('Error in startSpecialVCSession:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async endSpecialVCSession(sessionId: number): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(
+        'UPDATE special_vc_sessions SET left_at = NOW() WHERE id = $1',
+        [sessionId]
+      );
+    } catch (error) {
+      console.error('Error in endSpecialVCSession:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateSpecialVCTimeLog(userId: string, date: string, corridorMinutes: number, evaluationMinutes: number, _angelCorridorMinutes: number, _angelEvaluationMinutes: number, vcType: string): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      const menheraMinutes = vcType === 'menhera' ? corridorMinutes : 0;
+      const needyMinutes = vcType === 'needy' ? evaluationMinutes : 0;
+      
+      await client.query(
+        `INSERT INTO special_vc_time_logs (user_id, date, menhera_minutes, needy_minutes) 
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (user_id, date) 
+         DO UPDATE SET 
+           menhera_minutes = $3, 
+           needy_minutes = $4, 
+           updated_at = NOW()`,
+        [userId, date, menheraMinutes, needyMinutes]
+      );
+    } catch (error) {
+      console.error('Error in updateSpecialVCTimeLog:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getSpecialVCStats(userId: string, startDate: string, endDate: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(
+        'SELECT * FROM special_vc_time_logs WHERE user_id = $1 AND date BETWEEN $2 AND $3',
+        [userId, startDate, endDate]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getSpecialVCStats:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getSpecialVCRanking(vcType: string, startDate: string, endDate: string): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const column = vcType === 'menhera' ? 'menhera_minutes' : 'needy_minutes';
+      const result = await client.query(
+        `SELECT * FROM special_vc_time_logs WHERE date BETWEEN $1 AND $2 AND ${column} > 0 ORDER BY ${column} DESC`,
+        [startDate, endDate]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Error in getSpecialVCRanking:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // 追加のトランザクション関連メソッド
+  async addTransaction(fromUserId: string | null, toUserId: string, amount: number, type: string, description: string): Promise<void> {
+    await this.createTransaction(fromUserId, toUserId, amount, type as any, description);
+  }
+
+  async getUserTransactions(userId: string, limit: number = 50): Promise<any[]> {
+    return await this.getTransactionHistory(userId, limit);
   }
 
   // 接続終了

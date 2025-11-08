@@ -220,73 +220,14 @@ async function getExistingUsers(): Promise<any[]> {
     
     const db = getDatabase();
     
-    // Databaseインスタンスの構造をチェック
-    console.log('[BALANCE-RESET-ALL] Database instance keys:', Object.keys(db));
-    
-    // まずSQLiteを直接試す（より確実）
+    // Databaseクラスの統合されたgetAllUsersメソッドを使用
     try {
-      console.log('[BALANCE-RESET-ALL] Attempting to fetch users via database.getUser method');
-      
-      // 単純にSQLiteから全ユーザーを取得
-      const dbInstance = (db as any).db;
-      
-      if (!dbInstance) {
-        console.error('[BALANCE-RESET-ALL] SQLite database instance not found');
-        return [];
-      }
-
-      return new Promise((resolve, reject) => {
-        // テーブルの存在確認
-        dbInstance.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", [], (err: any, row: any) => {
-          if (err) {
-            console.error('[BALANCE-RESET-ALL] Error checking table existence:', err);
-            reject(err);
-            return;
-          }
-          
-          if (!row) {
-            console.log('[BALANCE-RESET-ALL] Users table does not exist, returning empty array');
-            resolve([]);
-            return;
-          }
-
-          // ユーザーデータを取得
-          dbInstance.all('SELECT discord_id, balance FROM users', [], (err: any, rows: any[]) => {
-            if (err) {
-              console.error('[BALANCE-RESET-ALL] Error fetching users:', err);
-              reject(err);
-            } else {
-              console.log(`[BALANCE-RESET-ALL] SQLite: Fetched ${rows?.length || 0} existing users`);
-              resolve(rows || []);
-            }
-          });
-        });
-      });
-      
-    } catch (directError) {
-      console.error('[BALANCE-RESET-ALL] Direct SQLite access failed:', directError);
-      
-      // PostgreSQLを試す
-      try {
-        const usePostgreSQL = (db as any).usePostgreSQL;
-        console.log(`[BALANCE-RESET-ALL] Database mode: ${usePostgreSQL ? 'PostgreSQL' : 'SQLite'}`);
-        
-        if (usePostgreSQL) {
-          const postgresDb = (db as any).pgDb;
-          
-          if (postgresDb && typeof postgresDb.getAllUsers === 'function') {
-            console.log('[BALANCE-RESET-ALL] Using PostgreSQL to fetch users');
-            const users = await postgresDb.getAllUsers();
-            console.log(`[BALANCE-RESET-ALL] PostgreSQL: Fetched ${users.length} existing users`);
-            return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance }));
-          }
-        }
-      } catch (pgError) {
-        console.error('[BALANCE-RESET-ALL] PostgreSQL query error:', pgError);
-      }
-      
-      // 最後の手段：空配列を返す
-      console.log('[BALANCE-RESET-ALL] All database access methods failed, returning empty array');
+      console.log('[BALANCE-RESET-ALL] Using database.getAllUsers method');
+      const users = await db.getAllUsers();
+      console.log(`[BALANCE-RESET-ALL] Database: Fetched ${users.length} existing users`);
+      return users.map((user: any) => ({ discord_id: user.discord_id, balance: user.balance || 10000 }));
+    } catch (dbError) {
+      console.error('[BALANCE-RESET-ALL] Database getAllUsers failed:', dbError);
       return [];
     }
   } catch (error) {
@@ -407,7 +348,11 @@ export async function executeBalanceResetAll(interaction: any, targetAmount: num
             await db.createUser(user.discord_id);
             console.log(`[BALANCE RESET ALL] Created new user: ${user.discord_id} (${user.displayName})`);
           } catch (createError: any) {
-            if (createError.message && createError.message.includes('UNIQUE constraint failed')) {
+            if (createError.message && (
+              createError.message.includes('UNIQUE constraint failed') ||
+              createError.message.includes('duplicate key value') ||
+              createError.message.includes('already exists')
+            )) {
               // すでに存在する場合は無視
               console.log(`[BALANCE RESET ALL] User already exists: ${user.discord_id}`);
             } else {
