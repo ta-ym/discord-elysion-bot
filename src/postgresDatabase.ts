@@ -221,7 +221,7 @@ export class PostgreSQLDatabase {
         CREATE TABLE IF NOT EXISTS special_vc_sessions (
           id SERIAL PRIMARY KEY,
           user_id TEXT NOT NULL,
-          vc_type TEXT NOT NULL CHECK (vc_type IN ('menhera', 'needy')),
+          vc_type TEXT NOT NULL CHECK (vc_type IN ('corridor', 'evaluation')),
           joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           left_at TIMESTAMP,
           duration_minutes INTEGER,
@@ -234,8 +234,12 @@ export class PostgreSQLDatabase {
           id SERIAL PRIMARY KEY,
           user_id TEXT NOT NULL,
           date TEXT NOT NULL,
-          menhera_minutes INTEGER DEFAULT 0,
-          needy_minutes INTEGER DEFAULT 0,
+          corridor_minutes INTEGER DEFAULT 0,
+          evaluation_minutes INTEGER DEFAULT 0,
+          angel_corridor_minutes INTEGER DEFAULT 0,
+          angel_evaluation_minutes INTEGER DEFAULT 0,
+          corridor_sessions INTEGER DEFAULT 0,
+          evaluation_sessions INTEGER DEFAULT 0,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(user_id, date)
         )
@@ -255,6 +259,28 @@ export class PostgreSQLDatabase {
       await client.query(`CREATE INDEX IF NOT EXISTS idx_temp_vcs_expires_at ON temp_vcs(expires_at)`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_voice_sessions_user_id ON voice_sessions(user_id)`);
       await client.query(`CREATE INDEX IF NOT EXISTS idx_voice_time_logs_user_date ON voice_time_logs(user_id, date)`);
+
+      // 既存の制約を更新（corridor, evaluationに対応）
+      try {
+        await client.query(`ALTER TABLE special_vc_sessions DROP CONSTRAINT IF EXISTS special_vc_sessions_vc_type_check`);
+        await client.query(`ALTER TABLE special_vc_sessions ADD CONSTRAINT special_vc_sessions_vc_type_check CHECK (vc_type IN ('corridor', 'evaluation'))`);
+        console.log('special_vc_sessions制約を更新しました (corridor, evaluation)');
+      } catch (constraintError) {
+        console.warn('特別VC制約更新でエラー（既に正しい可能性）:', constraintError);
+      }
+
+      // special_vc_time_logsテーブルに新しいカラムを追加（マイグレーション）
+      try {
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS corridor_minutes INTEGER DEFAULT 0`);
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS evaluation_minutes INTEGER DEFAULT 0`);
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS angel_corridor_minutes INTEGER DEFAULT 0`);
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS angel_evaluation_minutes INTEGER DEFAULT 0`);
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS corridor_sessions INTEGER DEFAULT 0`);
+        await client.query(`ALTER TABLE special_vc_time_logs ADD COLUMN IF NOT EXISTS evaluation_sessions INTEGER DEFAULT 0`);
+        console.log('special_vc_time_logsテーブルに新しいカラムを追加しました');
+      } catch (columnError) {
+        console.warn('特別VCカラム追加でエラー（既に存在する可能性）:', columnError);
+      }
 
       await client.query('COMMIT');
       console.log('PostgreSQL全テーブル初期化完了');
@@ -1091,21 +1117,25 @@ export class PostgreSQLDatabase {
     }
   }
 
-  async updateSpecialVCTimeLog(userId: string, date: string, corridorMinutes: number, evaluationMinutes: number, _angelCorridorMinutes: number, _angelEvaluationMinutes: number, vcType: string): Promise<void> {
+  async updateSpecialVCTimeLog(userId: string, date: string, corridorMinutes: number, evaluationMinutes: number, angelCorridorMinutes: number, angelEvaluationMinutes: number, vcType: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const menheraMinutes = vcType === 'menhera' ? corridorMinutes : 0;
-      const needyMinutes = vcType === 'needy' ? evaluationMinutes : 0;
+      const sessionCount = 1; // 1回のセッション終了
       
       await client.query(
-        `INSERT INTO special_vc_time_logs (user_id, date, menhera_minutes, needy_minutes) 
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO special_vc_time_logs (user_id, date, corridor_minutes, evaluation_minutes, angel_corridor_minutes, angel_evaluation_minutes, corridor_sessions, evaluation_sessions) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (user_id, date) 
          DO UPDATE SET 
-           menhera_minutes = $3, 
-           needy_minutes = $4, 
+           corridor_minutes = special_vc_time_logs.corridor_minutes + $3,
+           evaluation_minutes = special_vc_time_logs.evaluation_minutes + $4,
+           angel_corridor_minutes = special_vc_time_logs.angel_corridor_minutes + $5,
+           angel_evaluation_minutes = special_vc_time_logs.angel_evaluation_minutes + $6,
+           corridor_sessions = special_vc_time_logs.corridor_sessions + $7,
+           evaluation_sessions = special_vc_time_logs.evaluation_sessions + $8,
            updated_at = NOW()`,
-        [userId, date, menheraMinutes, needyMinutes]
+        [userId, date, corridorMinutes, evaluationMinutes, angelCorridorMinutes, angelEvaluationMinutes, 
+         vcType === 'corridor' ? sessionCount : 0, vcType === 'evaluation' ? sessionCount : 0]
       );
     } catch (error) {
       console.error('Error in updateSpecialVCTimeLog:', error);
@@ -1134,11 +1164,17 @@ export class PostgreSQLDatabase {
   async getSpecialVCRanking(vcType: string, startDate: string, endDate: string): Promise<any[]> {
     const client = await this.pool.connect();
     try {
-      const column = vcType === 'menhera' ? 'menhera_minutes' : 'needy_minutes';
-      const result = await client.query(
-        `SELECT * FROM special_vc_time_logs WHERE date BETWEEN $1 AND $2 AND ${column} > 0 ORDER BY ${column} DESC`,
-        [startDate, endDate]
-      );
+      let query: string;
+      if (vcType === 'corridor') {
+        query = `SELECT user_id, date, corridor_minutes as total_minutes, angel_corridor_minutes as total_angel_minutes, corridor_sessions as total_sessions FROM special_vc_time_logs WHERE date BETWEEN $1 AND $2 AND corridor_minutes > 0 ORDER BY corridor_minutes DESC`;
+      } else if (vcType === 'evaluation') {
+        query = `SELECT user_id, date, evaluation_minutes as total_minutes, angel_evaluation_minutes as total_angel_minutes, evaluation_sessions as total_sessions FROM special_vc_time_logs WHERE date BETWEEN $1 AND $2 AND evaluation_minutes > 0 ORDER BY evaluation_minutes DESC`;
+      } else {
+        // 'both'の場合
+        query = `SELECT user_id, date, (corridor_minutes + evaluation_minutes) as total_minutes, (angel_corridor_minutes + angel_evaluation_minutes) as total_angel_minutes, (corridor_sessions + evaluation_sessions) as total_sessions FROM special_vc_time_logs WHERE date BETWEEN $1 AND $2 AND (corridor_minutes > 0 OR evaluation_minutes > 0) ORDER BY (corridor_minutes + evaluation_minutes) DESC`;
+      }
+      
+      const result = await client.query(query, [startDate, endDate]);
       return result.rows;
     } catch (error) {
       console.error('Error in getSpecialVCRanking:', error);
