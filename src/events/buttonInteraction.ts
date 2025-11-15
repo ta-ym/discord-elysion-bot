@@ -228,6 +228,30 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // 複製VCステータス変更
+      if (interaction.customId.startsWith('clone_vc_status_')) {
+        const channelId = interaction.customId.split('_')[3];
+        
+        const modal = new ModalBuilder()
+          .setCustomId(`clone_vc_status_modal_${channelId}`)
+          .setTitle('💬 チャンネルステータス変更');
+
+        const statusInput = new TextInputBuilder()
+          .setCustomId('new_channel_status')
+          .setLabel('新しいチャンネルステータス')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('例: 🎮 ゲーム中 | 📚 勉強会 | 💤 休憩中')
+          .setRequired(false)
+          .setMinLength(0)
+          .setMaxLength(1024);
+
+        const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(statusInput);
+        modal.addComponents(firstActionRow);
+
+        await interaction.showModal(modal);
+        return;
+      }
+
       // VC人数制限設定
       if (interaction.customId.startsWith('vc_limit_')) {
         const limitType = interaction.customId.split('_')[2];

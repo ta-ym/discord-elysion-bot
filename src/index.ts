@@ -150,13 +150,8 @@ class ElysionBot {
         console.log('Special VC tracker initialized');
         
         // 複製VC管理システムを初期化
-        const guild = this.client.guilds.cache.first();
-        if (guild) {
-          initializeCloneVCManager(this.database, guild);
-          console.log('Clone VC manager initialized');
-        } else {
-          console.warn('No guild found for Clone VC manager initialization');
-        }
+        initializeCloneVCManager(this.database);
+        console.log('Clone VC manager initialized');
       });
 
       console.log('Bot started successfully!');

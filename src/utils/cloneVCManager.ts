@@ -32,6 +32,7 @@ const MUSIC_BOT_IDS = [
 export class CloneVCManager {
   private database: Database;
   private createdChannels: Map<string, string> = new Map(); // userId -> channelId
+  private emptyChannelTimers: Map<string, NodeJS.Timeout> = new Map(); // channelId -> timer
 
   constructor(database: Database) {
     this.database = database;
@@ -167,24 +168,6 @@ export class CloneVCManager {
       // チャンネル名変更ボタンを送信
       await this.sendChannelNameChangeButton(newChannel, user.id);
 
-      // データベースに一時VCとして登録（1時間後に期限切れ）
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 1);
-
-      try {
-        await this.database.addTempVC(
-          newChannel.id,     // channelId
-          user.id,           // creatorId  
-          newChannelName,    // channelName
-          1,                 // durationHours
-          0,                 // cost (複製VCは無料)
-          expiresAt          // expiresAt
-        );
-        console.log(`[CLONE VC] Registered temp VC in database: ${newChannelName}`);
-      } catch (dbError) {
-        console.error(`[CLONE VC] Failed to register temp VC in database:`, dbError);
-      }
-
     } catch (error) {
       console.error('[CLONE VC] Error creating new VC:', error);
     }
@@ -206,35 +189,7 @@ export class CloneVCManager {
     console.log(`[CLONE VC] Creator ${user.tag} left their created VC: ${voiceState.channel.name}`);
 
     // チャンネルが空になったかチェック
-    const membersCount = voiceState.channel.members.size;
-    if (membersCount === 0) {
-      console.log(`[CLONE VC] VC is now empty, scheduling deletion: ${voiceState.channel.name}`);
-      
-      // 5秒後にチャンネルを削除（即座に削除すると不自然）
-      setTimeout(async () => {
-        try {
-          const channel = voiceState.guild.channels.cache.get(channelId);
-          if (channel && channel.type === ChannelType.GuildVoice) {
-            const voiceChannel = channel;
-            if (voiceChannel.members.size === 0) {
-              const channelName = voiceChannel.name;
-              await voiceChannel.delete();
-              this.createdChannels.delete(user.id);
-              
-              // データベースからも削除
-              try {
-                await this.database.removeTempVC(channelId);
-                console.log(`[CLONE VC] Deleted empty VC and removed from database: ${channelName}`);
-              } catch (dbError) {
-                console.error(`[CLONE VC] Failed to remove VC from database:`, dbError);
-              }
-            }
-          }
-        } catch (deleteError) {
-          console.error(`[CLONE VC] Failed to delete empty VC:`, deleteError);
-        }
-      }, 5000);
-    }
+    this.checkAndScheduleEmptyChannelDeletion(voiceState.channel);
   }
 
   /**
@@ -243,27 +198,27 @@ export class CloneVCManager {
   async handleCreatedVCJoin(voiceState: VoiceState): Promise<void> {
     if (!voiceState.member || !voiceState.channel) return;
 
-    // データベースで一時VCかどうかチェック
-    try {
-      const tempVC = await this.database.getTempVC(voiceState.channel.id);
-      if (tempVC && voiceState.channel.type === ChannelType.GuildVoice) {
-        const voiceChannel = voiceState.channel;
-        console.log(`[CLONE VC] User ${voiceState.member.user.tag} joined temp VC: ${voiceChannel.name}`);
+    // 複製VCかどうかチェック（データベースまたは作成チャンネルマップで）
+    const isCloneVC = Array.from(this.createdChannels.values()).includes(voiceState.channel.id);
+    
+    if (isCloneVC && voiceState.channel.type === ChannelType.GuildVoice) {
+      const voiceChannel = voiceState.channel;
+      console.log(`[CLONE VC] User ${voiceState.member.user.tag} joined clone VC: ${voiceChannel.name}`);
 
-        // 音楽Bot参加チェック
-        const isMusicBot = MUSIC_BOT_IDS.includes(voiceState.member.user.id);
-        if (isMusicBot) {
-          console.log(`[CLONE VC] Music Bot detected! Adjusting user limit to 3`);
-          try {
-            await voiceChannel.setUserLimit(3);
-            console.log(`[CLONE VC] User limit set to 3 for ${voiceChannel.name}`);
-          } catch (error) {
-            console.error(`[CLONE VC] Failed to update user limit:`, error);
-          }
+      // 削除タイマーをキャンセル（チャンネルが再び使用されている）
+      this.checkAndScheduleEmptyChannelDeletion(voiceChannel);
+
+      // 音楽Bot参加チェック
+      const isMusicBot = MUSIC_BOT_IDS.includes(voiceState.member.user.id);
+      if (isMusicBot) {
+        console.log(`[CLONE VC] Music Bot detected! Adjusting user limit to 3`);
+        try {
+          await voiceChannel.setUserLimit(3);
+          console.log(`[CLONE VC] User limit set to 3 for ${voiceChannel.name}`);
+        } catch (error) {
+          console.error(`[CLONE VC] Failed to update user limit:`, error);
         }
       }
-    } catch (error) {
-      console.error('[CLONE VC] Error checking temp VC:', error);
     }
   }
 
@@ -298,43 +253,78 @@ export class CloneVCManager {
             console.error(`[CLONE VC] Failed to reset user limit:`, error);
           }
         }
+
+        // チャンネルが空になったかチェック
+        this.checkAndScheduleEmptyChannelDeletion(voiceChannel);
       }
     } catch (error) {
       console.error('[CLONE VC] Error processing music bot leave:', error);
     }
   }
 
-  /**
-   * 定期的な期限切れVC清掃
-   * @param guild - Discordサーバーのインスタンス
-   */
-  async cleanupExpiredVCs(guild: any): Promise<void> {
-    try {
-      const expiredVCs = await this.database.getExpiredTempVCs();
-      
-      for (const tempVC of expiredVCs) {
-        try {
-          const channel = guild.channels.cache.get(tempVC.channel_id);
-          if (channel) {
-            await channel.delete();
-            console.log(`[CLONE VC] Deleted expired VC: ${tempVC.channel_name}`);
-          }
 
-          await this.database.removeTempVC(tempVC.channel_id);
-          
-          // 作成チャンネルマップからも削除
-          for (const [userId, channelId] of this.createdChannels.entries()) {
-            if (channelId === tempVC.channel_id) {
-              this.createdChannels.delete(userId);
-              break;
+
+  /**
+   * 空室チェックと3分後削除のスケジューリング
+   */
+  private checkAndScheduleEmptyChannelDeletion(channel: any): void {
+    if (!channel || channel.type !== ChannelType.GuildVoice) return;
+
+    const channelId = channel.id;
+    const membersCount = channel.members.size;
+
+    if (membersCount === 0) {
+      console.log(`[CLONE VC] VC is now empty, scheduling deletion in 3 minutes: ${channel.name}`);
+      
+      // 既存のタイマーがあればクリア
+      const existingTimer = this.emptyChannelTimers.get(channelId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      // 3分後にチャンネルを削除
+      const timer = setTimeout(async () => {
+        try {
+          // 削除前に再度空室チェック
+          const currentChannel = channel.guild.channels.cache.get(channelId);
+          if (currentChannel && currentChannel.type === ChannelType.GuildVoice) {
+            const voiceChannel = currentChannel;
+            if (voiceChannel.members.size === 0) {
+              const channelName = voiceChannel.name;
+              await voiceChannel.delete();
+              
+              // 作成チャンネルマップから削除
+              for (const [userId, storedChannelId] of this.createdChannels.entries()) {
+                if (storedChannelId === channelId) {
+                  this.createdChannels.delete(userId);
+                  break;
+                }
+              }
+
+              // タイマーマップから削除
+              this.emptyChannelTimers.delete(channelId);
+              
+              console.log(`[CLONE VC] Deleted empty VC after 3 minutes: ${channelName}`);
+            } else {
+              console.log(`[CLONE VC] VC is no longer empty, canceling deletion: ${voiceChannel.name}`);
+              this.emptyChannelTimers.delete(channelId);
             }
           }
-        } catch (cleanupError) {
-          console.error(`[CLONE VC] Failed to cleanup expired VC ${tempVC.channel_id}:`, cleanupError);
+        } catch (deleteError) {
+          console.error(`[CLONE VC] Failed to delete empty VC:`, deleteError);
+          this.emptyChannelTimers.delete(channelId);
         }
+      }, 3 * 60 * 1000); // 3分
+
+      this.emptyChannelTimers.set(channelId, timer);
+    } else {
+      // チャンネルが再び使用されている場合、削除タイマーをクリア
+      const existingTimer = this.emptyChannelTimers.get(channelId);
+      if (existingTimer) {
+        console.log(`[CLONE VC] VC is no longer empty, canceling scheduled deletion: ${channel.name}`);
+        clearTimeout(existingTimer);
+        this.emptyChannelTimers.delete(channelId);
       }
-    } catch (error) {
-      console.error('[CLONE VC] Error during cleanup:', error);
     }
   }
 
@@ -349,9 +339,9 @@ export class CloneVCManager {
         .setDescription(`**${channel.name}** へようこそ！\n\n**機能:**`)
         .addFields(
           { name: '👥', value: '最大2人まで利用可能', inline: true },
-          { name: '⏰', value: '1時間後に自動削除', inline: true },
+          { name: '⏰', value: '3分間空室で自動削除', inline: true },
           { name: '🤖', value: '音楽Bot参加時は3人まで', inline: true },
-          { name: '📝', value: 'チャンネル名は下のボタンで変更可能', inline: false }
+          { name: '📝', value: 'チャンネル名・ステータスは下のボタンで変更可能', inline: false }
         )
         .setFooter({ text: 'このメッセージは3分後に自動削除されます' })
         .setTimestamp();
@@ -362,8 +352,14 @@ export class CloneVCManager {
         .setStyle(ButtonStyle.Primary)
         .setEmoji('✏️');
 
+      const statusChangeButton = new ButtonBuilder()
+        .setCustomId(`clone_vc_status_${channel.id}`)
+        .setLabel('💬 ステータス変更')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('📝');
+
       const row = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(nameChangeButton);
+        .addComponents(nameChangeButton, statusChangeButton);
 
       const message = await channel.send({
         content: `<@${creatorUserId}>`,
@@ -391,10 +387,12 @@ export class CloneVCManager {
   getStats(): {
     activeChannels: number;
     createdChannels: Map<string, string>;
+    scheduledDeletions: number;
   } {
     return {
       activeChannels: this.createdChannels.size,
-      createdChannels: new Map(this.createdChannels)
+      createdChannels: new Map(this.createdChannels),
+      scheduledDeletions: this.emptyChannelTimers.size
     };
   }
 }
@@ -405,18 +403,11 @@ let cloneVCManager: CloneVCManager | null = null;
 /**
  * 複製VC管理システムを初期化
  */
-export function initializeCloneVCManager(database: Database, guild: any): void {
+export function initializeCloneVCManager(database: Database): void {
   if (cloneVCManager) {
     cloneVCManager = null;
   }
   cloneVCManager = new CloneVCManager(database);
-  
-  // 定期清掃を開始（10分毎）
-  setInterval(() => {
-    if (cloneVCManager && guild) {
-      cloneVCManager.cleanupExpiredVCs(guild);
-    }
-  }, 10 * 60 * 1000); // 10分
 }
 
 /**
