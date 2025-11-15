@@ -88,6 +88,23 @@ const voiceStateUpdateEvent: Event = {
         }
       }
 
+      // カテゴリ内一般VC処理（Bot以外）
+      if (cloneVCManager && !isBot) {
+        // カテゴリ内VCに参加した場合
+        if (newState.channel && !oldState.channel) {
+          await cloneVCManager.handleCategoryVCJoin(newState);
+        }
+        // カテゴリ内VCから退出した場合
+        else if (!newState.channel && oldState.channel) {
+          await cloneVCManager.handleCategoryVCLeave(oldState);
+        }
+        // カテゴリ内VC間移動の場合
+        else if (newState.channel && oldState.channel && newState.channelId !== oldState.channelId) {
+          await cloneVCManager.handleCategoryVCLeave(oldState);
+          await cloneVCManager.handleCategoryVCJoin(newState);
+        }
+      }
+
       // 新しいチャンネルに参加した場合
       if (newState.channel && newState.member) {
         console.log(`[VOICE] User ${newState.member.user.tag} joined VC: ${newState.channel.name}`);

@@ -7,6 +7,9 @@ const CLONE_VC_CHANNEL_ID = '1439275955481870357';
 // 夢見の庭園カテゴリID
 const YUMEMI_CATEGORY_ID = '1425044725865648148';
 
+// 削除対象外チャンネル（月影の扉）
+const PROTECTED_CHANNEL_ID = '1439275955481870357';
+
 // 音楽BotのユーザーID
 const MUSIC_BOT_IDS = [
   '1424994565252714590',
@@ -33,6 +36,7 @@ export class CloneVCManager {
   private database: Database;
   private createdChannels: Map<string, string> = new Map(); // userId -> channelId
   private emptyChannelTimers: Map<string, NodeJS.Timeout> = new Map(); // channelId -> timer
+  private categoryChannelTimers: Map<string, NodeJS.Timeout> = new Map(); // カテゴリ内一般VCの削除タイマー
 
   constructor(database: Database) {
     this.database = database;
@@ -382,17 +386,105 @@ export class CloneVCManager {
   }
 
   /**
+   * カテゴリ内VC（複製VC以外）の空室チェックと削除スケジューリング
+   */
+  private checkAndScheduleCategoryVCDeletion(channel: any): void {
+    if (!channel || channel.type !== ChannelType.GuildVoice) return;
+    if (channel.parentId !== YUMEMI_CATEGORY_ID) return; // 夢見の庭園カテゴリ以外は対象外
+    if (channel.id === PROTECTED_CHANNEL_ID) return; // 月影の扉は保護
+    if (channel.id === CLONE_VC_CHANNEL_ID) return; // 複製用VCは保護
+
+    const channelId = channel.id;
+    const membersCount = channel.members.size;
+
+    if (membersCount === 0) {
+      console.log(`[CLONE VC] Category VC is now empty, scheduling deletion in 3 minutes: ${channel.name}`);
+      
+      // 既存のタイマーがあればクリア
+      const existingTimer = this.categoryChannelTimers.get(channelId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      // 3分後にチャンネルを削除
+      const timer = setTimeout(async () => {
+        try {
+          // 削除前に再度空室チェック
+          const currentChannel = channel.guild.channels.cache.get(channelId);
+          if (currentChannel && currentChannel.type === ChannelType.GuildVoice) {
+            const voiceChannel = currentChannel;
+            if (voiceChannel.members.size === 0 && 
+                voiceChannel.parentId === YUMEMI_CATEGORY_ID && 
+                voiceChannel.id !== PROTECTED_CHANNEL_ID &&
+                voiceChannel.id !== CLONE_VC_CHANNEL_ID) {
+              
+              const channelName = voiceChannel.name;
+              await voiceChannel.delete();
+              
+              console.log(`[CLONE VC] Deleted empty category VC after 3 minutes: ${channelName}`);
+            } else {
+              console.log(`[CLONE VC] Category VC is no longer empty or is protected, canceling deletion: ${voiceChannel.name}`);
+            }
+          }
+          
+          // タイマーマップから削除
+          this.categoryChannelTimers.delete(channelId);
+        } catch (deleteError) {
+          console.error(`[CLONE VC] Failed to delete empty category VC:`, deleteError);
+          this.categoryChannelTimers.delete(channelId);
+        }
+      }, 3 * 60 * 1000); // 3分
+
+      this.categoryChannelTimers.set(channelId, timer);
+    } else {
+      // チャンネルが再び使用されている場合、削除タイマーをクリア
+      const existingTimer = this.categoryChannelTimers.get(channelId);
+      if (existingTimer) {
+        console.log(`[CLONE VC] Category VC is no longer empty, canceling scheduled deletion: ${channel.name}`);
+        clearTimeout(existingTimer);
+        this.categoryChannelTimers.delete(channelId);
+      }
+    }
+  }
+
+  /**
+   * カテゴリ内VCへの参加処理
+   */
+  async handleCategoryVCJoin(voiceState: VoiceState): Promise<void> {
+    if (!voiceState.member || !voiceState.channel) return;
+    
+    // 夢見の庭園カテゴリ内のVCかチェック
+    if (voiceState.channel.parentId === YUMEMI_CATEGORY_ID) {
+      this.checkAndScheduleCategoryVCDeletion(voiceState.channel);
+    }
+  }
+
+  /**
+   * カテゴリ内VCからの退出処理
+   */
+  async handleCategoryVCLeave(voiceState: VoiceState): Promise<void> {
+    if (!voiceState.member || !voiceState.channel) return;
+    
+    // 夢見の庭園カテゴリ内のVCかチェック
+    if (voiceState.channel.parentId === YUMEMI_CATEGORY_ID) {
+      this.checkAndScheduleCategoryVCDeletion(voiceState.channel);
+    }
+  }
+
+  /**
    * 統計情報を取得
    */
   getStats(): {
     activeChannels: number;
     createdChannels: Map<string, string>;
     scheduledDeletions: number;
+    categoryScheduledDeletions: number;
   } {
     return {
       activeChannels: this.createdChannels.size,
       createdChannels: new Map(this.createdChannels),
-      scheduledDeletions: this.emptyChannelTimers.size
+      scheduledDeletions: this.emptyChannelTimers.size,
+      categoryScheduledDeletions: this.categoryChannelTimers.size
     };
   }
 }
