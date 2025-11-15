@@ -1,4 +1,4 @@
-import { VoiceState, ChannelType, PermissionFlagsBits } from 'discord.js';
+import { VoiceState, ChannelType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { Database } from '../database';
 
 // 複製用VCのチャンネルID
@@ -6,6 +6,24 @@ const CLONE_VC_CHANNEL_ID = '1439275955481870357';
 
 // 夢見の庭園カテゴリID
 const YUMEMI_CATEGORY_ID = '1425044725865648148';
+
+// 音楽BotのユーザーID
+const MUSIC_BOT_IDS = [
+  '1424994565252714590',
+  '1424994682735431743', 
+  '1424994753422037083',
+  '1424994828541890672',
+  // 一般的なMusicBotも含める
+  '235088799074484224', // Rythm
+  '184405311681912832', // Hydra
+  '155149108183695360', // Dyno
+  '159985870458322944', // Mee6
+  '252128902418268161', // Jockie Music
+  '472911936951156740', // FredBoat
+  '506710045115121675', // Groovy
+  '412500843584741389', // Vexera
+  '249218508288016394', // NadekoBot
+];
 
 /**
  * 複製用VC管理システム
@@ -42,29 +60,86 @@ export class CloneVCManager {
         return;
       }
 
+      // 特権ロールID
+      const PRIVILEGED_ROLES = [
+        '1424768596726251651', // 最高神
+        '1428737130271871147', // 女神
+        '1425862683521191937', // 神徒
+      ];
+
       // 新しいVCを作成
       const newChannelName = `${user.displayName}の部屋`;
+      const permissionOverwrites = [
+        {
+          id: guild.id, // @everyone
+          allow: [
+            PermissionFlagsBits.Connect, 
+            PermissionFlagsBits.Speak, 
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.UseVAD, // 音声検出
+            PermissionFlagsBits.Stream, // 画面共有
+            PermissionFlagsBits.UseEmbeddedActivities, // アクティビティ
+            PermissionFlagsBits.UseApplicationCommands, // アプリコマンド
+            PermissionFlagsBits.AttachFiles, // ファイル添付
+            PermissionFlagsBits.EmbedLinks, // リンク埋め込み
+            PermissionFlagsBits.SendMessages, // メッセージ送信（VC内チャット用）
+          ],
+          deny: [
+            PermissionFlagsBits.ManageChannels, // チャンネル管理を拒否
+          ],
+        },
+        {
+          id: user.id, // VC作成者
+          allow: [
+            PermissionFlagsBits.Connect, 
+            PermissionFlagsBits.Speak, 
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.UseVAD,
+            PermissionFlagsBits.Stream,
+            PermissionFlagsBits.UseEmbeddedActivities,
+            PermissionFlagsBits.UseApplicationCommands,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.MoveMembers, // メンバー移動権限のみ
+          ],
+          deny: [
+            PermissionFlagsBits.ManageChannels, // チャンネル管理は拒否
+          ],
+        },
+      ];
+
+      // 特権ロールには完全な管理権権を付与
+      for (const roleId of PRIVILEGED_ROLES) {
+        const role = guild.roles.cache.get(roleId);
+        if (role) {
+          permissionOverwrites.push({
+            id: roleId,
+            allow: [
+              PermissionFlagsBits.Connect,
+              PermissionFlagsBits.Speak,
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.ManageChannels, // 特権ロールのみ管理可能
+              PermissionFlagsBits.MoveMembers,
+              PermissionFlagsBits.UseVAD,
+              PermissionFlagsBits.Stream,
+              PermissionFlagsBits.UseEmbeddedActivities,
+              PermissionFlagsBits.UseApplicationCommands,
+              PermissionFlagsBits.AttachFiles,
+              PermissionFlagsBits.EmbedLinks,
+              PermissionFlagsBits.SendMessages,
+            ],
+            deny: [], // 明示的に空配列を指定
+          });
+        }
+      }
+
       const newChannel = await guild.channels.create({
         name: newChannelName,
         type: ChannelType.GuildVoice,
         parent: category.id,
         userLimit: 2, // 2人制限
-        permissionOverwrites: [
-          {
-            id: guild.id, // @everyone
-            allow: [PermissionFlagsBits.Connect, PermissionFlagsBits.Speak, PermissionFlagsBits.ViewChannel],
-          },
-          {
-            id: user.id, // VC作成者
-            allow: [
-              PermissionFlagsBits.Connect, 
-              PermissionFlagsBits.Speak, 
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.ManageChannels, // チャンネル管理権限
-              PermissionFlagsBits.MoveMembers, // メンバー移動権限
-            ],
-          },
-        ],
+        permissionOverwrites,
       });
 
       console.log(`[CLONE VC] Created new VC: ${newChannelName} (${newChannel.id})`);
@@ -88,6 +163,9 @@ export class CloneVCManager {
         }
         return;
       }
+
+      // チャンネル名変更ボタンを送信
+      await this.sendChannelNameChangeButton(newChannel, user.id);
 
       // データベースに一時VCとして登録（1時間後に期限切れ）
       const expiresAt = new Date();
@@ -168,11 +246,61 @@ export class CloneVCManager {
     // データベースで一時VCかどうかチェック
     try {
       const tempVC = await this.database.getTempVC(voiceState.channel.id);
-      if (tempVC) {
-        console.log(`[CLONE VC] User ${voiceState.member.user.tag} joined temp VC: ${voiceState.channel.name}`);
+      if (tempVC && voiceState.channel.type === ChannelType.GuildVoice) {
+        const voiceChannel = voiceState.channel;
+        console.log(`[CLONE VC] User ${voiceState.member.user.tag} joined temp VC: ${voiceChannel.name}`);
+
+        // 音楽Bot参加チェック
+        const isMusicBot = MUSIC_BOT_IDS.includes(voiceState.member.user.id);
+        if (isMusicBot) {
+          console.log(`[CLONE VC] Music Bot detected! Adjusting user limit to 3`);
+          try {
+            await voiceChannel.setUserLimit(3);
+            console.log(`[CLONE VC] User limit set to 3 for ${voiceChannel.name}`);
+          } catch (error) {
+            console.error(`[CLONE VC] Failed to update user limit:`, error);
+          }
+        }
       }
     } catch (error) {
       console.error('[CLONE VC] Error checking temp VC:', error);
+    }
+  }
+
+  /**
+   * 作成されたVCからの退出処理（音楽Bot用）
+   */
+  async handleCreatedVCLeaveMusicBot(voiceState: VoiceState): Promise<void> {
+    if (!voiceState.member || !voiceState.channel) return;
+
+    // 音楽Botの退出かチェック
+    const isMusicBot = MUSIC_BOT_IDS.includes(voiceState.member.user.id);
+    if (!isMusicBot) return;
+
+    // データベースで一時VCかどうかチェック
+    try {
+      const tempVC = await this.database.getTempVC(voiceState.channel.id);
+      if (tempVC && voiceState.channel.type === ChannelType.GuildVoice) {
+        const voiceChannel = voiceState.channel;
+        console.log(`[CLONE VC] Music Bot left temp VC! Checking if user limit should be reset`);
+        
+        // チャンネルにMusicBotが残っているかチェック
+        const remainingMusicBots = voiceChannel.members.filter(member => 
+          MUSIC_BOT_IDS.includes(member.user.id)
+        );
+
+        if (remainingMusicBots.size === 0) {
+          console.log(`[CLONE VC] No Music Bots remaining, resetting user limit to 2`);
+          try {
+            await voiceChannel.setUserLimit(2);
+            console.log(`[CLONE VC] User limit reset to 2 for ${voiceChannel.name}`);
+          } catch (error) {
+            console.error(`[CLONE VC] Failed to reset user limit:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[CLONE VC] Error processing music bot leave:', error);
     }
   }
 
@@ -207,6 +335,53 @@ export class CloneVCManager {
       }
     } catch (error) {
       console.error('[CLONE VC] Error during cleanup:', error);
+    }
+  }
+
+  /**
+   * チャンネル名変更ボタンを送信
+   */
+  private async sendChannelNameChangeButton(channel: any, creatorUserId: string): Promise<void> {
+    try {
+      const embed = new EmbedBuilder()
+        .setColor('#00ff00')
+        .setTitle('🎤 個人VC作成完了')
+        .setDescription(`**${channel.name}** へようこそ！\n\n**機能:**`)
+        .addFields(
+          { name: '👥', value: '最大2人まで利用可能', inline: true },
+          { name: '⏰', value: '1時間後に自動削除', inline: true },
+          { name: '🤖', value: '音楽Bot参加時は3人まで', inline: true },
+          { name: '📝', value: 'チャンネル名は下のボタンで変更可能', inline: false }
+        )
+        .setFooter({ text: 'このメッセージは3分後に自動削除されます' })
+        .setTimestamp();
+
+      const nameChangeButton = new ButtonBuilder()
+        .setCustomId(`clone_vc_rename_${channel.id}`)
+        .setLabel('📝 チャンネル名変更')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('✏️');
+
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(nameChangeButton);
+
+      const message = await channel.send({
+        content: `<@${creatorUserId}>`,
+        embeds: [embed],
+        components: [row]
+      });
+
+      // 3分後にメッセージを削除
+      setTimeout(async () => {
+        try {
+          await message.delete();
+        } catch (deleteError) {
+          console.warn(`[CLONE VC] Failed to delete info message:`, deleteError);
+        }
+      }, 3 * 60 * 1000); // 3分
+
+    } catch (error) {
+      console.error('[CLONE VC] Failed to send channel name change button:', error);
     }
   }
 

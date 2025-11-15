@@ -76,6 +76,18 @@ const voiceStateUpdateEvent: Event = {
         }
       }
 
+      // 複製VC処理（音楽Bot専用）
+      if (cloneVCManager && isMusicBot) {
+        // 音楽Botが作成されたVCに参加した場合
+        if (newState.channel && !oldState.channel) {
+          await cloneVCManager.handleCreatedVCJoin(newState);
+        }
+        // 音楽Botが作成されたVCから退出した場合
+        else if (!newState.channel && oldState.channel) {
+          await cloneVCManager.handleCreatedVCLeaveMusicBot(oldState);
+        }
+      }
+
       // 新しいチャンネルに参加した場合
       if (newState.channel && newState.member) {
         console.log(`[VOICE] User ${newState.member.user.tag} joined VC: ${newState.channel.name}`);

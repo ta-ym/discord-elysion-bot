@@ -204,6 +204,30 @@ const buttonInteractionEvent: Event = {
         return;
       }
 
+      // 複製VC名前変更
+      if (interaction.customId.startsWith('clone_vc_rename_')) {
+        const channelId = interaction.customId.split('_')[3];
+        
+        const modal = new ModalBuilder()
+          .setCustomId(`clone_vc_rename_modal_${channelId}`)
+          .setTitle('🎤 チャンネル名変更');
+
+        const nameInput = new TextInputBuilder()
+          .setCustomId('new_channel_name')
+          .setLabel('新しいチャンネル名')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('例: プライベートルーム')
+          .setRequired(true)
+          .setMinLength(1)
+          .setMaxLength(100);
+
+        const firstActionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput);
+        modal.addComponents(firstActionRow);
+
+        await interaction.showModal(modal);
+        return;
+      }
+
       // VC人数制限設定
       if (interaction.customId.startsWith('vc_limit_')) {
         const limitType = interaction.customId.split('_')[2];
