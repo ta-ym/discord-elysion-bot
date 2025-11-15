@@ -6,6 +6,7 @@ import { initializeTempVCPanel } from './utils/tempVCManager';
 import { initializeCurrencyLogger } from './utils/currencyLogger';
 import { initializeVoiceTimeTracker } from './utils/voiceTimeTracker';
 import { initializeSpecialVCTracker } from './utils/specialVCTracker';
+import { initializeCloneVCManager } from './utils/cloneVCManager';
 import { systemLogger } from './utils/systemLogger';
 import { railwayLogger } from './utils/railwayLogger';
 
@@ -147,6 +148,15 @@ class ElysionBot {
         // 特別VC追跡システムを初期化
         initializeSpecialVCTracker(this.database);
         console.log('Special VC tracker initialized');
+        
+        // 複製VC管理システムを初期化
+        const guild = this.client.guilds.cache.first();
+        if (guild) {
+          initializeCloneVCManager(this.database, guild);
+          console.log('Clone VC manager initialized');
+        } else {
+          console.warn('No guild found for Clone VC manager initialization');
+        }
       });
 
       console.log('Bot started successfully!');

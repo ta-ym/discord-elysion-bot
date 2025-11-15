@@ -2,6 +2,7 @@ import { Events, VoiceState } from 'discord.js';
 import { Event } from '../types';
 import { ProfileSearcher } from '../utils/profileSearcher';
 import { getSpecialVCTracker } from '../utils/specialVCTracker';
+import { getCloneVCManager } from '../utils/cloneVCManager';
 import { globalDatabase } from '../index';
 
 // MusicBotのユーザーID
@@ -26,6 +27,7 @@ const voiceStateUpdateEvent: Event = {
       const database = globalDatabase;
       const profileSearcher = new ProfileSearcher(newState.client);
       const specialVCTracker = getSpecialVCTracker();
+      const cloneVCManager = getCloneVCManager();
       
       // チャンネルが一時VCかどうかをチェック
       const checkTempVC = async (channelId: string | null) => {
@@ -55,6 +57,22 @@ const voiceStateUpdateEvent: Event = {
         // VC移動の場合
         else if (newState.channel && oldState.channel && newState.channelId !== oldState.channelId) {
           await specialVCTracker.handleVoiceMove(oldState, newState);
+        }
+      }
+
+      // 複製VC処理（Bot以外）
+      if (cloneVCManager && !isBot) {
+        // 複製用VCに参加した場合
+        if (newState.channel && !oldState.channel) {
+          await cloneVCManager.handleCloneVCJoin(newState);
+        }
+        // 作成されたVCから退出した場合
+        else if (!newState.channel && oldState.channel) {
+          await cloneVCManager.handleCreatedVCLeave(oldState);
+        }
+        // 作成されたVCに参加した場合
+        else if (newState.channel && !oldState.channel) {
+          await cloneVCManager.handleCreatedVCJoin(newState);
         }
       }
 
