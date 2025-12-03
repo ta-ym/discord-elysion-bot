@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role } from 'discord.js';
 import { Command } from '../types';
 import { getActiveSalaryRoles, getSalaryByRoleId, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
-import { checkCommandPermission } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const salaryCommand: Command = {
   data: new SlashCommandBuilder()
@@ -26,9 +26,13 @@ const salaryCommand: Command = {
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   
   async execute(interaction: ChatInputCommandInteraction) {
-    // 権限チェック
-    if (await checkCommandPermission(interaction, 'salary')) {
-      return; // 権限なし
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
     }
 
     const targetUser = interaction.options.getUser('user', true);

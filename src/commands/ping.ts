@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../types';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const pingCommand: Command = {
   data: new SlashCommandBuilder()
@@ -7,6 +8,15 @@ const pingCommand: Command = {
     .setDescription('Replies with Pong!'),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
     const timeDiff = sent.createdTimestamp - interaction.createdTimestamp;
     

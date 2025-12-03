@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { Command } from '../types';
 import { getCloneVCManager } from '../utils/cloneVCManager';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const cloneVCCommand: Command = {
   data: new SlashCommandBuilder()
@@ -19,6 +20,15 @@ const cloneVCCommand: Command = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
     
     try {

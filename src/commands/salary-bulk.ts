@@ -1,8 +1,8 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, GuildMember, User, ButtonInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, User, ButtonInteraction } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
 import { getActiveSalaryRoles, getRoleDisplayName, getTotalSalaryByRoleIds, SalaryRoleConfig } from '../config/salaryRoles';
-import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 // ユーザー分析結果の型定義
 interface UserAnalysis {
@@ -271,14 +271,13 @@ const salaryBulkCommand: Command = {
         .setRequired(false)),
   
   async execute(interaction: ChatInputCommandInteraction) {
-    const member = interaction.member as GuildMember;
     const database = new Database();
     const isPreviewMode = interaction.options.getBoolean('preview') ?? false;
     
-    // 権限チェック
-    if (!hasSalaryPermission(member)) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
-        content: getSalaryPermissionErrorMessage(),
+        content: getAdminPermissionErrorMessage(),
         ephemeral: true
       });
       return;
@@ -464,13 +463,12 @@ export async function executeSalaryBulkFromPreview(
     // データベース接続確認
     const database = new Database();
 
-    // 権限チェック
-    const member = interaction.member as GuildMember | null;
-    if (!member || !hasSalaryPermission(member)) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
       const permissionErrorEmbed = new EmbedBuilder()
         .setColor('#ff0000')
-        .setTitle('❌ 権限エラー')
-        .setDescription(getSalaryPermissionErrorMessage())
+        .setTitle('❤️ 権限エラー')
+        .setDescription(getAdminPermissionErrorMessage())
         .setTimestamp();
 
       await interaction.editReply({

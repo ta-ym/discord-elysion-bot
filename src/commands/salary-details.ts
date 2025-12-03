@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Permiss
 import { Command, SalaryDetail } from '../types';
 import { Database } from '../database';
 import { getRoleDisplayName } from '../config/salaryRoles';
-import { checkCommandPermission } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const salaryDetailsCommand: Command = {
   data: new SlashCommandBuilder()
@@ -29,8 +29,11 @@ const salaryDetailsCommand: Command = {
 
       // 権限チェック（他人の給与を見る場合は管理者権限が必要）
       if (targetUser.id !== interaction.user.id) {
-        if (await checkCommandPermission(interaction, 'salary-details')) {
-          return; // 権限なし
+        if (!hasAdminPermission(interaction.user.id)) {
+          await interaction.editReply({
+            content: getAdminPermissionErrorMessage()
+          });
+          return;
         }
       }
 

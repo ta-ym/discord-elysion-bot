@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
 import { getTotalSalaryByRoleIds, SALARY_ROLES } from '../config/salaryRoles';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const salaryDiagnosticCommand: Command = {
   data: new SlashCommandBuilder()
@@ -12,6 +13,15 @@ const salaryDiagnosticCommand: Command = {
         .setRequired(true)),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const targetUser = interaction.options.getUser('user', true);
     const guild = interaction.guild;
 

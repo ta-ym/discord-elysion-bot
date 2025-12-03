@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from '
 import { Command } from '../types';
 import { getVoiceTimeTracker } from '../utils/voiceTimeTracker';
 import { getAngelRoleConfig, calculateVoiceReward } from '../config/angelRole';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const voiceStatsCommand: Command = {
   data: new SlashCommandBuilder()
@@ -74,6 +75,15 @@ const voiceStatsCommand: Command = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
     const tracker = getVoiceTimeTracker();
 

@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
 import { railwayLogger } from '../utils/railwayLogger';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -38,6 +39,15 @@ module.exports = {
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction: ChatInputCommandInteraction) {
+        // 権限チェック（特定ユーザーのみ）
+        if (!hasAdminPermission(interaction.user.id)) {
+            await interaction.reply({
+                content: getAdminPermissionErrorMessage(),
+                ephemeral: true
+            });
+            return;
+        }
+
         try {
             const subcommand = interaction.options.getSubcommand();
 

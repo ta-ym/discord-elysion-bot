@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const debugCommand: Command = {
   data: new SlashCommandBuilder()
@@ -7,6 +8,15 @@ const debugCommand: Command = {
     .setDescription('【管理者専用】現在のユーザー情報を表示（デバッグ用）'),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const user = interaction.user;
     const member = interaction.member as any;
     

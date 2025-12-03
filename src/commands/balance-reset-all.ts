@@ -8,7 +8,7 @@ import {
   MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
-import { checkCommandPermission } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 // データベースインスタンスを遅延初期化
 let database: Database | null = null;
@@ -39,9 +39,13 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
 
-  // 権限チェック
-  if (await checkCommandPermission(interaction, 'balance-reset-all')) {
-    return; // 権限なし
+  // 権限チェック（特定ユーザーのみ）
+  if (!hasAdminPermission(interaction.user.id)) {
+    await interaction.reply({
+      content: getAdminPermissionErrorMessage(),
+      ephemeral: true
+    });
+    return;
   }
 
   // インタラクションを先にdeferして15分の時間制限を確保

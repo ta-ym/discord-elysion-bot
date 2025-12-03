@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
 import { globalDatabase } from '../index';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const historyCommand: Command = {
   data: new SlashCommandBuilder()
@@ -14,6 +15,15 @@ const historyCommand: Command = {
         .setMaxValue(20)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const limit = interaction.options.getInteger('limit') || 10;
     const database = globalDatabase;
     

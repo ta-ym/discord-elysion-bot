@@ -8,6 +8,7 @@ import {
   ButtonStyle
 } from 'discord.js';
 import { Database } from '../database';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const database = new Database();
 
@@ -27,6 +28,15 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
+
+  // 権限チェック（特定ユーザーのみ）
+  if (!hasAdminPermission(interaction.user.id)) {
+    await interaction.reply({
+      content: getAdminPermissionErrorMessage(),
+      ephemeral: true
+    });
+    return;
+  }
 
   try {
     const targetUser = interaction.options.getUser('user', true) as User;

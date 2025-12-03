@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../types';
-import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 import { resendTempVCPanel } from '../utils/tempVCManager';
 
 const tempVcPanelCommand: Command = {
@@ -9,12 +9,10 @@ const tempVcPanelCommand: Command = {
     .setDescription('【管理者専用】一時VC作成パネルを送信する'),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    const member = interaction.member as GuildMember;
-    
-    // 権限チェック（管理者のみ）
-    if (!hasSalaryPermission(member)) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
-        content: getSalaryPermissionErrorMessage(),
+        content: getAdminPermissionErrorMessage(),
         ephemeral: true
       });
       return;

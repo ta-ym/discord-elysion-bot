@@ -2,6 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Permiss
 import { Command } from '../types';
 import { Database } from '../database';
 import { getRoleDisplayName } from '../config/salaryRoles';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const salaryHistoryCommand: Command = {
   data: new SlashCommandBuilder()
@@ -19,6 +20,15 @@ const salaryHistoryCommand: Command = {
         .setMaxValue(50)),
   
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     try {
       const database = new Database();
       const member = interaction.member as GuildMember;

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { Command } from '../types';
 import { getSpecialVCTracker } from '../utils/specialVCTracker';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const specialVCStatsCommand: Command = {
   data: new SlashCommandBuilder()
@@ -60,6 +61,15 @@ const specialVCStatsCommand: Command = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
     const tracker = getSpecialVCTracker();
 

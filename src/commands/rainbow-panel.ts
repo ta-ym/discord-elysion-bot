@@ -1,7 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { Command } from '../types';
 import { sendPublicVCPanel } from '../utils/publicVCManager';
-import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/permissions';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const rainbowPanelCommand: Command = {
   data: new SlashCommandBuilder()
@@ -9,12 +9,10 @@ const rainbowPanelCommand: Command = {
     .setDescription('【管理者専用】虹色の楽園に公開VC管理パネルを送信します'),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    const member = interaction.member as GuildMember;
-    
-    // 権限チェック（管理者のみ）
-    if (!hasSalaryPermission(member)) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
-        content: getSalaryPermissionErrorMessage(),
+        content: getAdminPermissionErrorMessage(),
         ephemeral: true
       });
       return;

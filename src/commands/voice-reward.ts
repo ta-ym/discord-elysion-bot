@@ -4,6 +4,7 @@ import { Database } from '../database';
 import { getVoiceTimeTracker } from '../utils/voiceTimeTracker';
 import { calculateVoiceReward } from '../config/angelRole';
 import { getCurrencyLogger } from '../utils/currencyLogger';
+import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 
 const voiceRewardCommand: Command = {
   data: new SlashCommandBuilder()
@@ -61,6 +62,15 @@ const voiceRewardCommand: Command = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    // 権限チェック（特定ユーザーのみ）
+    if (!hasAdminPermission(interaction.user.id)) {
+      await interaction.reply({
+        content: getAdminPermissionErrorMessage(),
+        ephemeral: true
+      });
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
     const database = new Database();
     const tracker = getVoiceTimeTracker();
