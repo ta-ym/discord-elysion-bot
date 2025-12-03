@@ -14,7 +14,7 @@ const database = new Database();
 
 export const data = new SlashCommandBuilder()
   .setName('salary-rollback-all')
-  .setDescription('【危険】指定した月の全員の月給支給をロールバックします')
+  .setDescription('【管理者専用】指定した月の全員の月給支給をロールバックします')
   .addStringOption(option =>
     option.setName('confirmation')
       .setDescription('確認用：この操作を実行するには "CONFIRM_ROLLBACK_ALL" と入力してください')

@@ -6,7 +6,7 @@ import { resendTempVCPanel } from '../utils/tempVCManager';
 const tempVcPanelCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('temp-vc-panel')
-    .setDescription('一時VC作成パネルを再送信します（管理者専用）'),
+    .setDescription('【管理者専用】一時VC作成パネルを送信する'),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;

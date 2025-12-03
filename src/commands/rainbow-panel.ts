@@ -6,7 +6,7 @@ import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/p
 const rainbowPanelCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('rainbow-panel')
-    .setDescription('虹色の楽園に公開VC管理パネルを送信します（管理者専用）'),
+    .setDescription('【管理者専用】虹色の楽園に公開VC管理パネルを送信します'),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const member = interaction.member as GuildMember;

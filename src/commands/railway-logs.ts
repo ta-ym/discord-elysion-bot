@@ -4,7 +4,7 @@ import { railwayLogger } from '../utils/railwayLogger';
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('railway-logs')
-        .setDescription('Railway ログ管理')
+        .setDescription('【管理者専用】Railway ログ管理')
         .addSubcommand(subcommand =>
             subcommand
                 .setName('status')

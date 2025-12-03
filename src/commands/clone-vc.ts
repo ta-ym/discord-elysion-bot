@@ -5,7 +5,7 @@ import { getCloneVCManager } from '../utils/cloneVCManager';
 const cloneVCCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('clone-vc')
-    .setDescription('複製VC管理システムの状態を確認')
+    .setDescription('【管理者専用】複製VC管理システムの状態を確認')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand

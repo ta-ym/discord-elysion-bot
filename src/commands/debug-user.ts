@@ -4,7 +4,7 @@ import { Command } from '../types';
 const debugCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('debug-user')
-    .setDescription('現在のユーザー情報を表示（デバッグ用）'),
+    .setDescription('【管理者専用】現在のユーザー情報を表示（デバッグ用）'),
   
   async execute(interaction: ChatInputCommandInteraction) {
     const user = interaction.user;

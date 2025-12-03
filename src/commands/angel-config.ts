@@ -5,7 +5,7 @@ import { getAngelRoleConfig, ANGEL_ROLE_CONFIG } from '../config/angelRole';
 const angelConfigCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('angel-config')
-    .setDescription('天使ロール設定管理')
+    .setDescription('【管理者専用】天使ロールの設定管理')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand

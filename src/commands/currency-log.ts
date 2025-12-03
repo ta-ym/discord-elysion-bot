@@ -7,7 +7,7 @@ import { hasSalaryPermission, getSalaryPermissionErrorMessage } from '../utils/p
 const currencyLogCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('currency-log')
-    .setDescription('通貨取引履歴をログチャンネルに表示します（管理者専用）')
+    .setDescription('【管理者専用】通貨取引履歴をログチャンネルに表示します')
     .addSubcommand(subcommand =>
       subcommand
         .setName('user')
