@@ -7,7 +7,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const salaryDetailsCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('salary-details')
-    .setDescription('ユーザーの給与内訳を確認します')
+    .setDescription('【管理者専用】ユーザーの給与内訳を確認します')
     .addUserOption(option =>
       option.setName('user')
         .setDescription('給与内訳を確認するユーザー（省略時は自分）')

@@ -1,7 +1,10 @@
 import { GuildMember, CommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
 
-// 管理者専用ユーザーID
-export const ADMIN_USER_ID = '690378679985111090';
+// 管理者専用ユーザーIDリスト
+export const ADMIN_USER_IDS = [
+  '690378679985111090',
+  '1337300895188258816'
+];
 
 // 一般ユーザーが使用可能なコマンド
 export const PUBLIC_COMMANDS = [
@@ -10,12 +13,12 @@ export const PUBLIC_COMMANDS = [
 ];
 
 /**
- * ユーザーが管理者権限を持っているかチェック（特定ユーザーIDのみ）
+ * ユーザーが管理者権限を持っているかチェック（特定ユーザーIDリスト）
  * @param userId ユーザーID
  * @returns 権限があるかどうか
  */
 export function hasAdminPermission(userId: string): boolean {
-  return userId === ADMIN_USER_ID;
+  return ADMIN_USER_IDS.includes(userId);
 }
 
 /**
@@ -67,7 +70,7 @@ export async function checkCommandPermission(interaction: CommandInteraction, co
   }
   
   console.log(`[PERMISSION CHECK] Access denied for user ${username} (${userId}) to command ${commandName}`);
-  console.log(`[PERMISSION CHECK] Required admin user ID: ${ADMIN_USER_ID}`);
+  console.log(`[PERMISSION CHECK] Required admin user IDs: ${ADMIN_USER_IDS.join(', ')}`);
   console.log(`[PERMISSION CHECK] Public commands: ${PUBLIC_COMMANDS.join(', ')}`);
   
   // 権限なし - エラーメッセージを送信

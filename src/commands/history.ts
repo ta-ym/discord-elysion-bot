@@ -6,7 +6,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const historyCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('history')
-    .setDescription('あなたのRu_men取引履歴を確認します')
+    .setDescription('【管理者専用】あなたのRu_men取引履歴を確認します')
     .addIntegerOption(option =>
       option.setName('limit')
         .setDescription('表示する履歴の件数（デフォルト: 10件）')

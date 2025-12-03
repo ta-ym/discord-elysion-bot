@@ -259,7 +259,7 @@ async function sendSalaryBreakdownDM(user: User, salaryInfo: { totalSalary: numb
 const salaryBulkCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('salary-bulk')
-    .setDescription('登録された全ロールのメンバーに一斉給与支給を行います')
+    .setDescription('【管理者専用】登録された全ロールのメンバーに一齐給与支給を行います')
     .addStringOption(option =>
       option.setName('month')
         .setDescription('支給対象月（YYYY-MM形式、省略時は今月）')

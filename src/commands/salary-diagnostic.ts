@@ -6,7 +6,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const salaryDiagnosticCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('salary-diagnostic')
-    .setDescription('指定されたユーザーの給与計算診断を行います')
+    .setDescription('【管理者専用】指定されたユーザーの給与計算診断を行います')
     .addUserOption(option =>
       option.setName('user')
         .setDescription('診断対象のユーザー')

@@ -13,7 +13,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const salaryConfigCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('salary-config')
-    .setDescription('月給ロール設定管理（管理者専用）')
+    .setDescription('【管理者専用】月給ロール設定管理')
     .addSubcommand(subcommand =>
       subcommand
         .setName('list')

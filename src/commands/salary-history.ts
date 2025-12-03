@@ -7,7 +7,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const salaryHistoryCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('salary-history')
-    .setDescription('月給受取履歴を表示します')
+    .setDescription('【管理者専用】月給受取履歴を表示します')
     .addUserOption(option =>
       option.setName('user')
         .setDescription('履歴を確認するユーザー（管理者のみ他ユーザー指定可能）')

@@ -9,7 +9,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const voiceRewardCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('voice-reward')
-    .setDescription('通話時間に基づく報酬支払いシステム')
+    .setDescription('【管理者専用】通話時間に基づく報酬支払いシステム')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand

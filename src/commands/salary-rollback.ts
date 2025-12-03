@@ -14,7 +14,7 @@ const database = new Database();
 
 export const data = new SlashCommandBuilder()
   .setName('salary-rollback')
-  .setDescription('指定したユーザーの最新の月給支給をロールバックします')
+  .setDescription('【管理者専用】指定したユーザーの最新の月給支給をロールバックします')
   .addUserOption(option =>
     option.setName('user')
       .setDescription('ロールバック対象のユーザー')

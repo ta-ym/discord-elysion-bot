@@ -8,7 +8,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const giveCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('give')
-    .setDescription('ユーザーにRu_menを付与します（管理者専用）')
+    .setDescription('【管理者専用】ユーザーにRu_menを付与します')
     .addUserOption(option =>
       option.setName('user')
         .setDescription('Ru_menを付与するユーザー')

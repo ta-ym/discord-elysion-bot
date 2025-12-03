@@ -5,7 +5,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const payCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('pay')
-    .setDescription('特定のメンバーに任意の金額を支払う（管理者専用）')
+    .setDescription('【管理者専用】特定のメンバーに任意の金額を支払う')
     .addUserOption(option =>
       option.setName('user')
         .setDescription('支払い対象のユーザー')

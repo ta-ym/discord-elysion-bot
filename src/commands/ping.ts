@@ -5,7 +5,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const pingCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Replies with Pong!'),
+    .setDescription('【管理者専用】Replies with Pong!'),
   
   async execute(interaction: ChatInputCommandInteraction) {
     // 権限チェック（特定ユーザーのみ）

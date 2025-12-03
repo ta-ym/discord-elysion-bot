@@ -6,7 +6,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const specialVCStatsCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('special-vc-stats')
-    .setDescription('回廊・評価VC統計を表示')
+    .setDescription('【管理者専用】回廊・評価VC統計を表示')
     .addSubcommand(subcommand =>
       subcommand
         .setName('user')

@@ -7,7 +7,7 @@ import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/per
 const voiceStatsCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('voice-stats')
-    .setDescription('天使ロールの通話時間統計を表示')
+    .setDescription('【管理者専用】天使ロールの通話時間統計を表示')
     .addSubcommand(subcommand =>
       subcommand
         .setName('user')
