@@ -161,7 +161,32 @@ const transferCommand: Command = {
               });
             }
 
-            // 送金ログを送信
+            // 成功メッセージを先に送信（インタラクションエラーを防ぐ）
+            const successEmbed = new EmbedBuilder()
+              .setColor('#00ff00')
+              .setTitle('✅ 送金完了')
+              .addFields(
+                { name: '送金先', value: `<@${targetUser.id}>`, inline: true },
+                { name: '送金額', value: `${amount.toLocaleString()} Ru`, inline: true },
+                { name: 'メッセージ', value: message, inline: false }
+              )
+              .setTimestamp()
+              .setFooter({ text: '送金が正常に完了しました' });
+
+            // インタラクション応答（エラーハンドリング付き）
+            try {
+              if (!i.replied && !i.deferred) {
+                await i.update({ 
+                  embeds: [successEmbed], 
+                  components: [] 
+                });
+              }
+            } catch (interactionError) {
+              console.error('[TRANSFER] Interaction update error:', interactionError);
+              // インタラクションが失敗してもログは送信する
+            }
+
+            // 送金ログを送信（インタラクション処理後に実行）
             try {
               // 送金後の残高を取得
               const updatedSender = await database.getUser(interaction.user.id);
@@ -182,23 +207,8 @@ const transferCommand: Command = {
               }
             } catch (logError) {
               console.error('[TRANSFER] Error sending transfer log:', logError);
+              // ログエラーはアプリケーションを停止させない
             }
-
-            const successEmbed = new EmbedBuilder()
-              .setColor('#00ff00')
-              .setTitle('✅ 送金完了')
-              .addFields(
-                { name: '送金先', value: `<@${targetUser.id}>`, inline: true },
-                { name: '送金額', value: `${amount.toLocaleString()} Ru`, inline: true },
-                { name: 'メッセージ', value: message, inline: false }
-              )
-              .setTimestamp()
-              .setFooter({ text: '送金が正常に完了しました' });
-
-            await i.update({ 
-              embeds: [successEmbed], 
-              components: [] 
-            });
 
             // 送金先にDMで通知（オプション）
             try {

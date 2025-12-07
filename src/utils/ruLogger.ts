@@ -4,6 +4,8 @@ import { Client, EmbedBuilder, TextChannel } from 'discord.js';
 const RU_LOG_CHANNEL_ID = '1434825382795935795';
 
 // 支払いログチャンネル（ユーザー間送金用）
+// 注意: このチャンネルIDが無効または削除された場合、ログは送信されませんが、
+// アプリケーションはクラッシュせずに正常に動作を継続します
 const PAYMENT_LOG_CHANNEL_ID = '1431735461193191555';
 
 /**
@@ -19,9 +21,21 @@ export async function sendRuTransactionLog(
   balance: number
 ): Promise<void> {
   try {
-    const channel = await client.channels.fetch(RU_LOG_CHANNEL_ID) as TextChannel;
-    if (!channel) {
-      console.error(`[RU LOG] Channel ${RU_LOG_CHANNEL_ID} not found`);
+    // チャンネルの存在確認を強化
+    let channel: TextChannel | null = null;
+    
+    try {
+      channel = await client.channels.fetch(RU_LOG_CHANNEL_ID) as TextChannel;
+    } catch (fetchError: any) {
+      if (fetchError.code === 10003) {
+        console.warn(`[RU LOG] Channel ${RU_LOG_CHANNEL_ID} not found or inaccessible - transaction log skipped`);
+        return;
+      }
+      throw fetchError;
+    }
+    
+    if (!channel || channel.type !== 0) {
+      console.error(`[RU LOG] Channel ${RU_LOG_CHANNEL_ID} is not a valid text channel`);
       return;
     }
 
@@ -126,9 +140,21 @@ export async function sendTransferLog(
   reason?: string
 ): Promise<void> {
   try {
-    const channel = await client.channels.fetch(PAYMENT_LOG_CHANNEL_ID) as TextChannel;
-    if (!channel) {
-      console.error(`[PAYMENT LOG] Channel ${PAYMENT_LOG_CHANNEL_ID} not found`);
+    // チャンネルの存在確認を強化
+    let channel: TextChannel | null = null;
+    
+    try {
+      channel = await client.channels.fetch(PAYMENT_LOG_CHANNEL_ID) as TextChannel;
+    } catch (fetchError: any) {
+      if (fetchError.code === 10003) {
+        console.warn(`[PAYMENT LOG] Channel ${PAYMENT_LOG_CHANNEL_ID} not found or inaccessible - transfer log skipped`);
+        return;
+      }
+      throw fetchError;
+    }
+    
+    if (!channel || channel.type !== 0) {
+      console.error(`[PAYMENT LOG] Channel ${PAYMENT_LOG_CHANNEL_ID} is not a valid text channel`);
       return;
     }
 
