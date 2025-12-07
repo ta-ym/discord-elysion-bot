@@ -94,17 +94,17 @@ const buttonInteractionEvent: Event = {
             fields: [
               {
                 name: '⏰ 6時間プラン',
-                value: '料金: **5,000 Ru**\n有効期限: 6時間',
+                value: '料金: **2,000 Ru**\n有効期限: 6時間',
                 inline: true
               },
               {
                 name: '⏰ 12時間プラン',
-                value: '料金: **10,000 Ru**\n有効期限: 12時間',
+                value: '料金: **5,000 Ru**\n有効期限: 12時間',
                 inline: true
               },
               {
                 name: '⏰ 24時間プラン',
-                value: '料金: **30,000 Ru**\n有効期限: 24時間',
+                value: '料金: **10,000 Ru**\n有効期限: 24時間',
                 inline: true
               }
             ],
@@ -117,17 +117,17 @@ const buttonInteractionEvent: Event = {
             .addComponents(
               new ButtonBuilder()
                 .setCustomId('temp_vc_6h')
-                .setLabel('6時間 (5,000 Ru)')
+                .setLabel('6時間 (2,000 Ru)')
                 .setStyle(ButtonStyle.Secondary)
                 .setEmoji('⏰'),
               new ButtonBuilder()
                 .setCustomId('temp_vc_12h')
-                .setLabel('12時間 (10,000 Ru)')
+                .setLabel('12時間 (5,000 Ru)')
                 .setStyle(ButtonStyle.Primary)
                 .setEmoji('⏰'),
               new ButtonBuilder()
                 .setCustomId('temp_vc_24h')
-                .setLabel('24時間 (30,000 Ru)')
+                .setLabel('24時間 (10,000 Ru)')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('⏰')
             );

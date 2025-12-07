@@ -25,11 +25,11 @@ const TEMP_VC_PANEL_CHANNEL_ID = '1433096344171712636';
 function getPlanInfo(planType: string): { hours: number; cost: number; label: string } | null {
   switch (planType) {
     case '6h':
-      return { hours: 6, cost: 5000, label: '6時間' };
+      return { hours: 6, cost: 2000, label: '6時間' };
     case '12h':
-      return { hours: 12, cost: 10000, label: '12時間' };
+      return { hours: 12, cost: 5000, label: '12時間' };
     case '24h':
-      return { hours: 24, cost: 30000, label: '24時間' };
+      return { hours: 24, cost: 10000, label: '24時間' };
     default:
       return null;
   }
@@ -314,7 +314,7 @@ export function createTempVCPanel() {
       { name: '🔐 プライバシー', value: '権限のある人以外は見えません', inline: true },
       { name: '👥 最大人数', value: '2人まで（MusicBot参加時は自動で3人に拡張）', inline: true },
       { name: '🤖 MusicBot対応', value: '自動で3人枠に拡張', inline: true },
-      { name: '⏰ 料金プラン', value: '```📅 6時間  →  5,000 Ru\n📅 12時間 → 10,000 Ru\n📅 24時間 → 30,000 Ru```', inline: false },
+      { name: '⏰ 料金プラン', value: '```📅 6時間  →  2,000 Ru\n📅 12時間 →  5,000 Ru\n📅 24時間 → 10,000 Ru```', inline: false },
       { name: '🎯 用途例', value: '• プライベートな会議・相談\n• 作業用の限定空間\n• MusicBotでの音楽鑑賞\n• 少人数でのディスカッション', inline: false }
     )
     .setFooter({ text: '💰 料金は作成時に自動で引き落とされます' })
