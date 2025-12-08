@@ -116,16 +116,25 @@ export class Database {
     
     this.pgDb = new PostgreSQLDatabase();
 
-    // PostgreSQL接続の健全性チェック
+    // PostgreSQL接続の健全性チェック（Railway用に遅延実行）
     setTimeout(async () => {
       try {
+        console.log('PostgreSQL接続チェック開始...');
         await this.checkPostgreSQLHealth();
         console.log('PostgreSQL接続確認完了 - 全機能利用可能');
       } catch (healthError) {
         console.error('PostgreSQL接続失敗:', healthError);
-        throw new Error('PostgreSQLに接続できません。アプリケーションを終了します。');
+        console.error('エラー詳細:', healthError instanceof Error ? healthError.stack : healthError);
+        
+        // 本番環境では接続失敗時にプロセスを終了
+        if (process.env.NODE_ENV === 'production') {
+          console.error('本番環境でのPostgreSQL接続失敗により、プロセスを終了します');
+          process.exit(1);
+        } else {
+          console.warn('開発環境のため、PostgreSQL接続失敗を警告として扱います');
+        }
       }
-    }, 3000);
+    }, 10000); // Railway環境を考慮して10秒に延長
   }
 
   // PostgreSQL健全性チェック

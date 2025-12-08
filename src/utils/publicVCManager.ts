@@ -83,32 +83,47 @@ export async function sendPublicVCPanel(interaction: ChatInputCommandInteraction
  * 公開VC作成モーダルを表示
  */
 export async function showPublicVCCreationModal(interaction: ButtonInteraction): Promise<void> {
-  const modal = new ModalBuilder()
-    .setCustomId('public_vc_creation_modal')
-    .setTitle('🌈 公開VC作成');
+  try {
+    const modal = new ModalBuilder()
+      .setCustomId('public_vc_creation_modal')
+      .setTitle('🌈 公開VC作成');
 
-  const nameInput = new TextInputBuilder()
-    .setCustomId('vc_name')
-    .setLabel('チャンネル名')
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder('例: 雑談ルーム、ゲーム部屋、作業通話')
-    .setRequired(true)
-    .setMaxLength(50);
+    const nameInput = new TextInputBuilder()
+      .setCustomId('vc_name')
+      .setLabel('チャンネル名')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('例: 雑談ルーム、ゲーム部屋、作業通話')
+      .setRequired(true)
+      .setMaxLength(50);
 
-  const descriptionInput = new TextInputBuilder()
-    .setCustomId('vc_description')
-    .setLabel('説明（オプション）')
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder('例: みんなで楽しく雑談しましょう！')
-    .setRequired(false)
-    .setMaxLength(200);
+    const descriptionInput = new TextInputBuilder()
+      .setCustomId('vc_description')
+      .setLabel('説明（オプション）')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('例: みんなで楽しく雑談しましょう！')
+      .setRequired(false)
+      .setMaxLength(200);
 
-  const actionRow1 = new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput);
-  const actionRow2 = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-  
-  modal.addComponents(actionRow1, actionRow2);
+    const actionRow1 = new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput);
+    const actionRow2 = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    
+    modal.addComponents(actionRow1, actionRow2);
 
-  await interaction.showModal(modal);
+    await interaction.showModal(modal);
+    console.log(`[PUBLIC VC] Modal shown to ${interaction.user.tag}`);
+    
+  } catch (error) {
+    console.error('公開VC作成モーダル表示エラー:', error);
+    
+    try {
+      await interaction.reply({
+        content: '❌ モーダル表示中にエラーが発生しました。もう一度お試しください。',
+        ephemeral: true
+      });
+    } catch (replyError) {
+      console.error('エラー応答に失敗:', replyError);
+    }
+  }
 }
 
 /**
@@ -214,10 +229,24 @@ export async function createPublicVC(interaction: any, vcName: string, vcDescrip
 
   } catch (error) {
     console.error('公開VC作成エラー:', error);
-    await interaction.reply({
-      content: '❌ 公開VC作成中にエラーが発生しました。',
-      ephemeral: true
-    });
+    
+    // インタラクション応答のエラーハンドリング
+    const errorMessage = '❌ 公開VC作成中にエラーが発生しました。';
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      } else if (interaction.deferred) {
+        await interaction.editReply({
+          content: errorMessage
+        });
+      }
+    } catch (interactionError) {
+      console.error('インタラクション応答エラー:', interactionError);
+    }
   }
 }
 
@@ -260,10 +289,19 @@ export async function showPublicVCList(interaction: ButtonInteraction): Promise<
 
   } catch (error) {
     console.error('公開VC一覧取得エラー:', error);
-    await interaction.reply({
-      content: '❌ 公開VC一覧の取得に失敗しました。',
-      ephemeral: true
-    });
+    
+    const errorMessage = '❌ 公開VC一覧の取得に失敗しました。';
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      }
+    } catch (interactionError) {
+      console.error('インタラクション応答エラー:', interactionError);
+    }
   }
 }
 
@@ -333,10 +371,24 @@ export async function deletePublicVC(interaction: ButtonInteraction, channelId: 
 
   } catch (error) {
     console.error('公開VC削除エラー:', error);
-    await interaction.reply({
-      content: '❌ 公開VC削除中にエラーが発生しました。',
-      ephemeral: true
-    });
+    
+    const errorMessage = '❌ 公開VC削除中にエラーが発生しました。';
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      } else if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({
+          content: errorMessage,
+          ephemeral: true
+        });
+      }
+    } catch (interactionError) {
+      console.error('インタラクション応答エラー:', interactionError);
+    }
   }
 }
 
@@ -394,9 +446,18 @@ export async function showPublicVCEditModal(interaction: ButtonInteraction, chan
 
   } catch (error) {
     console.error('公開VC編集モーダル表示エラー:', error);
-    await interaction.reply({
-      content: '❌ 設定変更画面の表示に失敗しました。',
-      ephemeral: true
-    });
+    
+    const errorMessage = '❌ 設定変更画面の表示に失敗しました。';
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      }
+    } catch (interactionError) {
+      console.error('インタラクション応答エラー:', interactionError);
+    }
   }
 }

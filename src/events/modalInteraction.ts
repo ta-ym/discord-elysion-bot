@@ -1,6 +1,7 @@
 import { Events } from 'discord.js';
 import { Event } from '../types';
 import { createTempVC } from '../utils/tempVCManager';
+import { createPublicVC } from '../utils/publicVCManager';
 
 const modalInteractionEvent: Event = {
   name: Events.InteractionCreate,
@@ -8,6 +9,15 @@ const modalInteractionEvent: Event = {
     if (!interaction.isModalSubmit()) return;
 
     try {
+      // 公開VC作成モーダル
+      if (interaction.customId === 'public_vc_creation_modal') {
+        const vcName = interaction.fields.getTextInputValue('vc_name');
+        const vcDescription = interaction.fields.getTextInputValue('vc_description') || undefined;
+        console.log(`[PUBLIC VC] Modal submitted by ${interaction.user.tag} for VC: "${vcName}"`);
+        await createPublicVC(interaction, vcName, vcDescription);
+        console.log(`[PUBLIC VC] VC creation completed for ${interaction.user.tag}`);
+        return;
+      }
       // 一時VC作成モーダル（プラン別）
       if (interaction.customId.startsWith('temp_vc_creation_modal_')) {
         const planType = interaction.customId.split('_')[4]; // 6h, 12h, 24h

@@ -43,21 +43,25 @@ export class PostgreSQLDatabase {
       isProduction: process.env['NODE_ENV'] === 'production'
     });
 
-    // Railway PostgreSQL接続設定（短いタイムアウト）
+    // Railway PostgreSQL接続設定（安定性重視）
     this.pool = new Pool({
       connectionString: process.env['DATABASE_URL'],
       ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
-      // 短い接続タイムアウト設定
-      connectionTimeoutMillis: 3000, // 3秒でタイムアウト（短縮）
-      idleTimeoutMillis: 10000, // 10秒でアイドル接続を終了
-      max: 5, // 最大接続数を削減
+      // Railway環境用の安定した接続設定
+      connectionTimeoutMillis: 30000, // 30秒でタイムアウト（Railway用に延長）
+      idleTimeoutMillis: 30000, // 30秒でアイドル接続を終了
+      max: 3, // 最大接続数を抑制（Railway制限対応）
+      min: 0, // 最小接続数は0
       // クエリタイムアウト設定
-      query_timeout: 5000, // 5秒でクエリタイムアウト（短縮）
+      query_timeout: 15000, // 15秒でクエリタイムアウト
       // 接続設定
       application_name: 'elysion-bot',
-      // Railway環境での接続設定
-      statement_timeout: 5000, // ステートメントタイムアウト
-      idle_in_transaction_session_timeout: 5000 // トランザクション内アイドルタイムアウト
+      // Railway環境での安定性設定
+      statement_timeout: 15000, // ステートメントタイムアウト
+      idle_in_transaction_session_timeout: 10000, // トランザクション内アイドルタイムアウト
+      // 接続リトライ設定
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10000
     });
 
     // 非同期初期化を実行（リトライ機能付き）
@@ -70,13 +74,13 @@ export class PostgreSQLDatabase {
   private async initializeWithRetry(maxRetries: number): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 5秒)`);
+        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 30秒)`);
         
-        // タイムアウト付きで初期化を実行
+        // タイムアウト付きで初期化を実行（Railway用に延長）
         await Promise.race([
           this.initializeTables(),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Initialization timeout after 5 seconds')), 5000)
+            setTimeout(() => reject(new Error('Initialization timeout after 30 seconds')), 30000)
           )
         ]);
         
@@ -85,19 +89,21 @@ export class PostgreSQLDatabase {
       } catch (error) {
         console.error(`PostgreSQL初期化試行 ${attempt} 失敗:`, error);
         
-        // 接続タイムアウトや予期される接続エラーの場合、早期に諦める
-        if (error instanceof Error && (
-          error.message.includes('timeout') ||
-          error.message.includes('ETIMEDOUT') ||
-          error.message.includes('Connection terminated')
-        )) {
-          console.log('接続タイムアウトエラーのため、これ以上のリトライをスキップします');
-          throw error;
+        // 接続エラーの詳細ログ
+        if (error instanceof Error) {
+          console.error(`接続エラー詳細: ${error.message}`);
+          console.error(`エラースタック: ${error.stack}`);
         }
         
         if (attempt === maxRetries) {
+          console.error('PostgreSQL初期化の最大リトライ回数に達しました');
           throw error; // 最後の試行で失敗した場合は例外を投げる
         }
+        
+        // リトライ前に待機（指数バックオフ）
+        const initWaitTime = attempt * 2000; // 2秒、4秒、6秒...
+        console.log(`${initWaitTime}ms待機してからリトライします...`);
+        await new Promise(resolve => setTimeout(resolve, initWaitTime));
         
         // より短い待機時間（1秒、2秒のみ）
         const waitTime = attempt * 1000;
@@ -293,16 +299,57 @@ export class PostgreSQLDatabase {
     }
   }
 
-  // 健全性チェック
+  // 健全性チェック（リトライとタイムアウト機能付き）
   async healthCheck(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query('SELECT 1 as test');
-      if (!result.rows || result.rows.length === 0) {
-        throw new Error('Health check query failed');
+    const maxRetries = 3;
+    const timeout = 15000; // 15秒タイムアウト
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let client: any = null;
+      try {
+        console.log(`PostgreSQLヘルスチェック試行 ${attempt}/${maxRetries}`);
+        
+        // タイムアウト付きで接続とクエリを実行
+        const healthCheckPromise = (async () => {
+          client = await this.pool.connect();
+          const result = await client.query('SELECT 1 as test, NOW() as current_time');
+          if (!result.rows || result.rows.length === 0) {
+            throw new Error('Health check query returned no results');
+          }
+          console.log('PostgreSQLヘルスチェック成功:', result.rows[0]);
+          return result;
+        })();
+        
+        await Promise.race([
+          healthCheckPromise,
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error(`Health check timeout after ${timeout}ms`)), timeout)
+          )
+        ]);
+        
+        return; // 成功したら終了
+        
+      } catch (error) {
+        console.error(`PostgreSQLヘルスチェック試行 ${attempt} 失敗:`, error);
+        
+        if (attempt === maxRetries) {
+          throw new Error(`PostgreSQL health check failed after ${maxRetries} attempts: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        
+        // 次の試行まで待機
+        const healthWaitTime = attempt * 1000; // 1秒、2秒、3秒
+        console.log(`${healthWaitTime}ms待機してからリトライします...`);
+        await new Promise(resolve => setTimeout(resolve, healthWaitTime));
+        
+      } finally {
+        if (client) {
+          try {
+            client.release();
+          } catch (releaseError) {
+            console.error('Client release error:', releaseError);
+          }
+        }
       }
-    } finally {
-      client.release();
     }
   }
 

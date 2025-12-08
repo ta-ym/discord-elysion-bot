@@ -5,6 +5,9 @@ import { SecurityUtils, ErrorHandler } from '../utils/security';
 import { getCurrencyLogger } from '../utils/currencyLogger';
 import { sendTransferLog } from '../utils/ruLogger';
 
+// 送金処理中のユーザーIDを管理（重複送金防止）
+const processingTransfers = new Set<string>();
+
 const transferCommand: Command = {
   data: new SlashCommandBuilder()
     .setName('transfer')
@@ -122,8 +125,19 @@ const transferCommand: Command = {
         time: 30000 
       });
 
+      let isProcessing = false; // 処理中フラグで重複防止
+      let transferKey: string | null = null; // 重複防止キーをスコープ外で管理
+
       collector?.on('collect', async (i) => {
+        // 既に処理中の場合は無視
+        if (isProcessing) {
+          console.log('[TRANSFER] Already processing, ignoring duplicate interaction');
+          return;
+        }
+
         if (i.customId === 'transfer_cancel') {
+          isProcessing = true;
+          collector.stop(); // コレクターを停止
           await i.update({ 
             content: '❌ 送金をキャンセルしました。', 
             embeds: [], 
@@ -133,13 +147,31 @@ const transferCommand: Command = {
         }
 
         if (i.customId.startsWith('transfer_confirm_')) {
-          // 実際の送金処理
-          const success = await database.transferMoney(
-            interaction.user.id,
-            targetUser.id,
-            amount,
-            message
-          );
+          isProcessing = true; // 処理開始をマーク
+          collector.stop(); // 追加のクリックを防ぐためコレクターを停止
+          
+          // 重複送金防止チェック
+          transferKey = `${interaction.user.id}_${targetUser.id}_${amount}`;
+          if (processingTransfers.has(transferKey)) {
+            console.log(`[TRANSFER] Duplicate transfer attempt blocked: ${transferKey}`);
+            await i.update({ 
+              content: '⚠️ この送金は既に処理中です。', 
+              embeds: [], 
+              components: [] 
+            });
+            return;
+          }
+          
+          processingTransfers.add(transferKey);
+          
+          try {
+            // 実際の送金処理
+            const success = await database.transferMoney(
+              interaction.user.id,
+              targetUser.id,
+              amount,
+              message
+            );
 
           if (success) {
             // セキュリティログ
@@ -227,12 +259,25 @@ const transferCommand: Command = {
               // DM送信失敗は無視
               console.log('Could not send DM to user:', dmError);
             }
+            
           } else {
             await i.update({ 
               content: '❌ 送金に失敗しました。残高が不足している可能性があります。', 
               embeds: [], 
               components: [] 
             });
+          }
+          
+          } catch (transferError) {
+            console.error('[TRANSFER] Error during transfer process:', transferError);
+            await i.update({ 
+              content: '❌ 送金処理中にエラーが発生しました。', 
+              embeds: [], 
+              components: [] 
+            });
+          } finally {
+            // 重複防止キーを削除（処理完了時）
+            processingTransfers.delete(transferKey);
           }
         }
       });
@@ -248,6 +293,12 @@ const transferCommand: Command = {
           } catch (error) {
             // メッセージが既に削除されている場合などは無視
           }
+        }
+        
+        // タイムアウト時も重複防止キーをクリーンアップ
+        if (transferKey && processingTransfers.has(transferKey)) {
+          processingTransfers.delete(transferKey);
+          console.log(`[TRANSFER] Cleaned up transfer key on timeout: ${transferKey}`);
         }
       });
       
