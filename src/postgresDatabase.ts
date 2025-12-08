@@ -66,58 +66,41 @@ export class PostgreSQLDatabase {
       keepAliveInitialDelayMillis: 30000
     });
 
-    // 非同期初期化を実行（強化されたリトライ機能付き）
-    this.initializeWithRetry(5).catch(error => {
-      console.error('PostgreSQL初期化最終エラー:', error);
-      console.error('Railway環境での接続問題により、DB機能は無効化されます');
-      console.error('ボットは起動を継続しますが、通貨機能は利用できません');
+    // Railway環境での初期化（エラー耐性を重視）
+    this.initializeGracefully().catch(() => {
+      console.error('='.repeat(50));
+      console.error('🚀 Railway PostgreSQL 接続ステータス');
+      console.error('='.repeat(50));
+      console.error('⚠️  データベース接続: 失敗');
+      console.error('🔄 ボット動作状態: 通常動作中 (データベース機能無し)');
+      console.error('🛠️  影響範囲: 通貨機能・ボイス追跡機能が一時的に無効');
+      console.error('🔄 自動復旧: 5分間隔で接続を再試行中...');
+      console.error('='.repeat(50));
     });
   }
 
-  private async initializeWithRetry(maxRetries: number): Promise<void> {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 60秒)`);
-        console.log('Railway環境での接続中... 時間がかかる場合があります');
-        
-        // タイムアウト付きで初期化を実行（Railway用に大幅延長）
-        await Promise.race([
-          this.initializeTables(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Initialization timeout after 60 seconds')), 60000)
-          )
-        ]);
-        
-        console.log('PostgreSQL初期化成功');
-        this.isConnected = true;
-        this.connectionAttempted = true;
-        return;
-      } catch (error) {
-        console.error(`PostgreSQL初期化試行 ${attempt} 失敗:`, error);
-        
-        // 接続エラーの詳細ログ
-        if (error instanceof Error) {
-          console.error(`接続エラー詳細: ${error.message}`);
-          console.error(`エラースタック: ${error.stack}`);
-        }
-        
-        if (attempt === maxRetries) {
-          console.error('PostgreSQL初期化の最大リトライ回数に達しました');
-          this.isConnected = false;
-          this.connectionAttempted = true;
-          throw error; // 最後の試行で失敗した場合は例外を投げる
-        }
-        
-        // リトライ前に待機（Railway用の長い指数バックオフ）
-        const initWaitTime = attempt * 5000; // 5秒、10秒、15秒、20秒、25秒...
-        console.log(`Railway環境での接続リトライ: ${initWaitTime}ms待機中...`);
-        await new Promise(resolve => setTimeout(resolve, initWaitTime));
-        
-        // より短い待機時間（1秒、2秒のみ）
-        const waitTime = attempt * 1000;
-        console.log(`${waitTime}ms待機してリトライします...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
+  // Railway環境用の簡結な初期化メソッド
+  private async initializeGracefully(): Promise<void> {
+    console.log('🚀 Railway環境でPostgreSQL接続を試行中...');
+    
+    try {
+      // 1回だけシンプルに初期化を試行
+      const initPromise = this.initializeTables();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Railway connection timeout (30s)')), 30000)
+      );
+      
+      await Promise.race([initPromise, timeoutPromise]);
+      
+      this.isConnected = true;
+      this.connectionAttempted = true;
+      console.log('✅ PostgreSQL初期化成功！データベース機能が利用可能です。');
+      
+    } catch (error) {
+      this.isConnected = false;
+      this.connectionAttempted = true;
+      console.error('⚠️ Railway PostgreSQL初期化失敗:', error instanceof Error ? error.message : error);
+      throw error;
     }
   }
 

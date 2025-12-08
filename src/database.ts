@@ -116,30 +116,27 @@ export class Database {
     
     this.pgDb = new PostgreSQLDatabase();
 
-    // PostgreSQL接続の健全性チェック（Railway用に大幅遅延実行）
+    // PostgreSQL接続の健全性チェック（Railway環境対応）
     setTimeout(async () => {
       try {
-        console.log('Railway環境でのPostgreSQL接続チェック開始...');
-        console.log('接続に時間がかかる場合があります。お待ちください...');
+        console.log('🔍 PostgreSQL接続状態を確認中...');
         await this.checkPostgreSQLHealth();
-        console.log('PostgreSQL接続確認完了 - 全機能利用可能');
+        console.log('✅ PostgreSQL接続確認完了 - 全機能利用可能');
       } catch (healthError) {
-        console.error('PostgreSQL接続失敗:', healthError);
-        console.error('エラー詳細:', healthError instanceof Error ? healthError.stack : healthError);
+        console.warn('⚠️ PostgreSQL接続チェック失敗 - フォールバックモードで動作中');
         
         // Railway環境では接続失敗を一時的な問題として扱う
         if (process.env.NODE_ENV === 'production') {
-          console.error('Railway環境でのPostgreSQL接続失敗を検出しました');
-          console.error('データベース機能は無効化されますが、ボットは継続動作します');
-          console.warn('データベース接続の復旧を試み続けます...');
+          console.log('🔄 データベース機能は無効化されていますが、ボットは正常動作中です');
+          console.log('🔧 データベース接続の復旧を定期的に試行します...');
           
           // 接続復旧を定期的に試行
           this.scheduleConnectionRetry();
         } else {
-          console.warn('開発環境のため、PostgreSQL接続失敗を警告として扱います');
+          console.warn('📝 開発環境: PostgreSQL接続失敗を警告として扱います');
         }
       }
-    }, 30000); // Railway環境を考慮して30秒に大幅延長
+    }, 15000); // 15秒に短縮（実用的な待機時間）
   }
 
   // PostgreSQL健全性チェック
