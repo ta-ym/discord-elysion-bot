@@ -116,7 +116,7 @@ export class Database {
     
     this.pgDb = new PostgreSQLDatabase();
 
-    // PostgreSQL接続の健全性チェック（Railway環境対応）
+    // PostgreSQL接続の健全性チェック（Railway環境対応 - 短縮版）
     setTimeout(async () => {
       try {
         console.log('🔍 PostgreSQL接続状態を確認中...');
@@ -136,7 +136,7 @@ export class Database {
           console.warn('📝 開発環境: PostgreSQL接続失敗を警告として扱います');
         }
       }
-    }, 15000); // 15秒に短縮（実用的な待機時間）
+    }, 8000); // 8秒に短縮（より実用的な待機時間）
   }
 
   // PostgreSQL健全性チェック

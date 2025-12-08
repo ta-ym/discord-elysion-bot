@@ -40,10 +40,27 @@ export class PostgreSQLDatabase {
       throw new Error('DATABASE_URL環境変数が設定されていません');
     }
 
-    console.log('PostgreSQL接続情報:', {
-      url: process.env['DATABASE_URL']?.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
-      isProduction: process.env['NODE_ENV'] === 'production'
-    });
+    // Railway接続情報の詳細表示
+    const dbUrl = process.env['DATABASE_URL'];
+    if (dbUrl) {
+      try {
+        const url = new URL(dbUrl);
+        console.log('🔗 PostgreSQL接続情報:');
+        console.log(`   ホスト: ${url.hostname}`);
+        console.log(`   ポート: ${url.port}`);
+        console.log(`   データベース: ${url.pathname.slice(1)}`);
+        console.log(`   ユーザー: ${url.username}`);
+        console.log(`   SSL: ${url.searchParams.get('sslmode') || 'default'}`);
+        console.log(`   本番環境: ${process.env['NODE_ENV'] === 'production'}`);
+      } catch (error) {
+        console.log('PostgreSQL接続情報:', {
+          url: dbUrl.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
+          isProduction: process.env['NODE_ENV'] === 'production'
+        });
+      }
+    } else {
+      console.error('❌ DATABASE_URL環境変数が設定されていません');
+    }
 
     // Railway PostgreSQL接続設定（超安定性重視）
     this.pool = new Pool({
@@ -66,49 +83,57 @@ export class PostgreSQLDatabase {
       keepAliveInitialDelayMillis: 30000
     });
 
-    // Railway環境での初期化（エラー耐性を重視）
-    this.initializeGracefully().catch(() => {
-      console.error('='.repeat(50));
-      console.error('🚀 Railway PostgreSQL 接続ステータス');
-      console.error('='.repeat(50));
-      console.error('⚠️  データベース接続: 失敗');
-      console.error('🔄 ボット動作状態: 通常動作中 (データベース機能無し)');
-      console.error('🛠️  影響範囲: 通貨機能・ボイス追跡機能が一時的に無効');
-      console.error('🔄 自動復旧: 5分間隔で接続を再試行中...');
-      console.error('='.repeat(50));
-    });
+    // Railway環境対応: シンプルな非同期初期化
+    console.log('🚀 Railway環境でのPostgreSQL初期化を開始...');
+    this.performSimpleInitialization();
   }
 
-  // Railway環境用の簡結な初期化メソッド
-  private async initializeGracefully(): Promise<void> {
-    console.log('🚀 Railway環境でPostgreSQL接続を試行中...');
-    
-    try {
-      // 1回だけシンプルに初期化を試行
-      const initPromise = this.initializeTables();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Railway connection timeout (30s)')), 30000)
-      );
-      
-      await Promise.race([initPromise, timeoutPromise]);
-      
-      this.isConnected = true;
-      this.connectionAttempted = true;
-      console.log('✅ PostgreSQL初期化成功！データベース機能が利用可能です。');
-      
-    } catch (error) {
-      this.isConnected = false;
-      this.connectionAttempted = true;
-      console.error('⚠️ Railway PostgreSQL初期化失敗:', error instanceof Error ? error.message : error);
-      throw error;
-    }
+  // Railway環境用のシンプル初期化メソッド
+  private performSimpleInitialization(): void {
+    // 非同期で実行し、結果に関係なく続行
+    setTimeout(async () => {
+      try {
+        console.log('🔍 PostgreSQL接続をテスト中...');
+        
+        // 10秒でタイムアウトする簡単なテスト
+        const testConnection = this.pool.connect();
+        const timeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Railway quick test timeout')), 10000)
+        );
+        
+        const client = await Promise.race([testConnection, timeout]) as any;
+        
+        // 接続成功したらテーブル初期化を試行
+        await this.initializeTables();
+        client.release();
+        
+        this.isConnected = true;
+        this.connectionAttempted = true;
+        console.log('✅ PostgreSQL接続成功 - データベース機能が利用可能です');
+        
+      } catch (error) {
+        this.isConnected = false;
+        this.connectionAttempted = true;
+        
+        console.log('='.repeat(60));
+        console.log('🚀 Railway PostgreSQL 接続ステータス');
+        console.log('='.repeat(60));
+        console.log('⚠️  状態: データベース接続失敗');
+        console.log('🔄 ボット: 正常動作中 (データベース機能無し)');
+        console.log('💫 影響: 通貨・ボイス追跡機能のみ無効');
+        console.log('🔄 復旧: 5分間隔で自動再試行');
+        console.log('='.repeat(60));
+      }
+    }, 5000); // 5秒待機してから実行
   }
 
   private async initializeTables(): Promise<void> {
+    console.log('📊 データベーステーブルを初期化中...');
     const client = await this.pool.connect();
     
     try {
-      // トランザクション開始
+      // Railway環境での安全なトランザクション開始
+      console.log('🔄 トランザクション開始...');
       await client.query('BEGIN');
 
       // ユーザーテーブル
@@ -290,57 +315,40 @@ export class PostgreSQLDatabase {
     }
   }
 
-  // 健全性チェック（リトライとタイムアウト機能付き）
+  // 簡略化されたヘルスチェック（Railway環境対応）
   async healthCheck(): Promise<void> {
-    const maxRetries = 5;
-    const timeout = 30000; // 30秒タイムアウト（Railway対応）
+    console.log('🏥 PostgreSQL簡易ヘルスチェック実行中...');
     
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      let client: any = null;
-      try {
-        console.log(`PostgreSQLヘルスチェック試行 ${attempt}/${maxRetries}`);
-        
-        // タイムアウト付きで接続とクエリを実行
-        const healthCheckPromise = (async () => {
-          client = await this.pool.connect();
-          const result = await client.query('SELECT 1 as test, NOW() as current_time');
-          if (!result.rows || result.rows.length === 0) {
-            throw new Error('Health check query returned no results');
-          }
-          console.log('PostgreSQLヘルスチェック成功:', result.rows[0]);
-          return result;
-        })();
-        
-        await Promise.race([
-          healthCheckPromise,
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Railway health check timeout after ${timeout}ms`)), timeout)
-          )
-        ]);
-        
-        this.isConnected = true;
-        return; // 成功したら終了
-        
-      } catch (error) {
-        console.error(`PostgreSQLヘルスチェック試行 ${attempt} 失敗:`, error);
-        
-        if (attempt === maxRetries) {
-          this.isConnected = false;
-          throw new Error(`PostgreSQL health check failed after ${maxRetries} attempts: ${error instanceof Error ? error.message : String(error)}`);
-        }
-        
-        // 次の試行まで待機（Railway用に延長）
-        const healthWaitTime = attempt * 3000; // 3秒、6秒、9秒、12秒、15秒
-        console.log(`Railway環境でのヘルスチェックリトライ: ${healthWaitTime}ms待機中...`);
-        await new Promise(resolve => setTimeout(resolve, healthWaitTime));
-        
-      } finally {
-        if (client) {
-          try {
-            client.release();
-          } catch (releaseError) {
-            console.error('Client release error:', releaseError);
-          }
+    let client: any = null;
+    try {
+      // 5秒でタイムアウトする簡単なチェック
+      const quickCheck = (async () => {
+        client = await this.pool.connect();
+        const result = await client.query('SELECT 1 as health_check');
+        return result;
+      })();
+      
+      await Promise.race([
+        quickCheck,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Quick health check timeout (5s)')), 5000)
+        )
+      ]);
+      
+      this.isConnected = true;
+      console.log('✅ PostgreSQLヘルスチェック成功');
+      
+    } catch (error) {
+      this.isConnected = false;
+      console.warn('❌ PostgreSQLヘルスチェック失敗:', error instanceof Error ? error.message : error);
+      throw error;
+      
+    } finally {
+      if (client) {
+        try {
+          client.release();
+        } catch (releaseError) {
+          console.error('Client release error:', releaseError);
         }
       }
     }
