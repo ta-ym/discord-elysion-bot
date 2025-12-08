@@ -130,7 +130,7 @@ export class PostgreSQLDatabase {
           
           // 超高速クエリテスト
           const queryStartTime = Date.now();
-          const result = await client.query('SELECT 1 as test');
+          await client.query('SELECT 1 as test');
           const queryTime = Date.now() - queryStartTime;
           
           console.log(`✅ 試行${attempt}: クエリ成功 (${queryTime}ms)`);
