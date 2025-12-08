@@ -99,91 +99,85 @@ export class PostgreSQLDatabase {
     this.performDirectConnectionTest();
   }
 
-  // Railway都度接続方式の診断メソッド
+  // Railway都度接続方式の診断メソッド（強力なリトライ付き）
   private performDirectConnectionTest(): void {
     setTimeout(async () => {
       console.log('='.repeat(60));
-      console.log('🆕 Railway PostgreSQL 都度接続テスト開始');
+      console.log('🚀 Railway PostgreSQL 高速接続テスト開始');
       console.log('='.repeat(60));
       
-      try {
-        console.log('🔍 Step 1: 直接接続テスト...');
-        const startTime = Date.now();
+      // 複数回リトライで接続安定性を向上
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`🔍 接続試行 ${attempt}/3: 超高速接続テスト...`);
+          const startTime = Date.now();
+          
+          // Railway用超短時間設定
+          const client = new Client({
+            connectionString: this.connectionString,
+            ssl: process.env['NODE_ENV'] === 'production' ? {
+              rejectUnauthorized: false
+            } : false,
+            connectionTimeoutMillis: 5000,  // 5秒に短縮
+            statement_timeout: 3000,        // 3秒に短縮
+            query_timeout: 3000,            // 3秒に短縮
+            application_name: `elysion-test-${attempt}`
+          });
         
-        // 都度接続方式で接続テスト
-        const client = new Client({
-          connectionString: this.connectionString,
-          ssl: process.env['NODE_ENV'] === 'production' ? {
-            rejectUnauthorized: false
-          } : false,
-          connectionTimeoutMillis: 15000, // 15秒タイムアウト
-          statement_timeout: 10000,       // 10秒ステートメントタイムアウト
-          query_timeout: 10000,           // 10秒クエリタイムアウト
-          application_name: 'elysion-bot-direct'
-        });
-        
-        await client.connect();
-        const connectTime = Date.now() - startTime;
-        console.log(`✅ 直接接続成功 (${connectTime}ms)`);
-        
-        // Step 2: 基本クエリテスト
-        console.log('🔍 Step 2: 基本クエリテスト...');
-        const queryStartTime = Date.now();
-        const result = await client.query('SELECT version(), current_database(), current_user, NOW()');
-        const queryTime = Date.now() - queryStartTime;
-        
-        console.log(`✅ クエリ成功 (${queryTime}ms)`);
-        console.log(`   PostgreSQL: ${result.rows[0].version.split(' ')[1]}`);
-        console.log(`   データベース: ${result.rows[0].current_database}`);
-        console.log(`   ユーザー: ${result.rows[0].current_user}`);
-        console.log(`   サーバー時間: ${result.rows[0].now}`);
-        
-        await client.end();
-        
-        // Step 3: テーブル初期化テスト
-        console.log('🔍 Step 3: テーブル初期化テスト...');
-        await this.initializeTables();
-        
-        this.isConnected = true;
-        this.connectionAttempted = true;
-        
-        console.log('='.repeat(60));
-        console.log('🎉 Railway都度接続モード: 成功！');
-        console.log(`⚡ 接続時間: ${connectTime}ms`);
-        console.log(`📊 クエリ時間: ${queryTime}ms`);
-        console.log(`🎯 総処理時間: ${Date.now() - startTime}ms`);
-        console.log('✅ データベース機能が利用可能です（プールなし方式）');
-        console.log('='.repeat(60));
-        
-      } catch (error) {
-        this.isConnected = false;
-        this.connectionAttempted = true;
-        
-        console.log('='.repeat(60));
-        console.log('❌ Railway都度接続モード: 失敗');
-        console.log('='.repeat(60));
-        console.log(`🚨 エラー: ${error instanceof Error ? error.message : error}`);
-        
-        // Railway特有のエラー分析
-        if (error instanceof Error) {
-          if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
-            console.log('📋 診断結果: Railway接続タイムアウト');
-            console.log('   💡 推奨解決策:');
-            console.log('   - Railway PostgreSQLプラグインの再起動');
-            console.log('   - 外部データベースサービスへの移行検討');
-            console.log('   - SQLiteローカルDBへの切り替え');
-          } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-            console.log('📋 診断結果: Railway PostgreSQLサービス未起動');
-            console.log('   💡 推奨解決策:');
-            console.log('   - Railwayダッシュボードでサービス状態確認');
-            console.log('   - DATABASE_URL環境変数の再設定');
+          await client.connect();
+          const connectTime = Date.now() - startTime;
+          console.log(`✅ 試行${attempt}: 接続成功 (${connectTime}ms)`);
+          
+          // 超高速クエリテスト
+          const queryStartTime = Date.now();
+          const result = await client.query('SELECT 1 as test');
+          const queryTime = Date.now() - queryStartTime;
+          
+          console.log(`✅ 試行${attempt}: クエリ成功 (${queryTime}ms)`);
+          await client.end();
+          
+          // 成功した場合はテーブル初期化
+          if (attempt === 1) {
+            console.log('🔍 テーブル初期化実行...');
+            await this.initializeTables();
+          }
+          
+          this.isConnected = true;
+          this.connectionAttempted = true;
+          
+          console.log('='.repeat(60));
+          console.log(`🎉 Railway高速接続成功！ (試行${attempt}回目)`);
+          console.log(`⚡ 接続: ${connectTime}ms, クエリ: ${queryTime}ms`);
+          console.log('✅ データベース機能が利用可能です');
+          console.log('='.repeat(60));
+          return; // 成功したらループを抜ける
+          
+        } catch (error) {
+          console.log(`❌ 試行${attempt}失敗: ${error instanceof Error ? error.message : error}`);
+          
+          if (attempt === 3) {
+            // 最終試行も失敗
+            this.isConnected = false;
+            this.connectionAttempted = true;
+            
+            console.log('='.repeat(60));
+            console.log('💥 Railway接続完全失敗（3回試行済み）');
+            console.log('='.repeat(60));
+            
+            if (error instanceof Error && error.message.includes('timeout')) {
+              console.log('🚨 Railway PostgreSQL応答なし - サービス状態を確認してください');
+              console.log('💡 解決策: Railwayダッシュボード → PostgreSQLプラグイン → Restart');
+            }
+            
+            console.log('🔄 フォールバックモードで継続動作');
+            console.log('='.repeat(60));
+          } else {
+            // リトライ前に少し待機
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
           }
         }
-        
-        console.log('🔄 フォールバックモードで継続動作します');
-        console.log('='.repeat(60));
       }
-    }, 2000); // 2秒待機
+    }, 1000); // 1秒待機で高速化
   }
 
   private async initializeTables(): Promise<void> {
@@ -498,9 +492,9 @@ export class PostgreSQLDatabase {
         ssl: process.env['NODE_ENV'] === 'production' ? {
           rejectUnauthorized: false
         } : false,
-        connectionTimeoutMillis: 10000,
-        statement_timeout: 8000,
-        query_timeout: 8000,
+        connectionTimeoutMillis: 4000,  // 4秒に短縮
+        statement_timeout: 2000,        // 2秒に短縮
+        query_timeout: 2000,            // 2秒に短縮
         application_name: 'elysion-get-user'
       });
       
@@ -534,9 +528,9 @@ export class PostgreSQLDatabase {
         ssl: process.env['NODE_ENV'] === 'production' ? {
           rejectUnauthorized: false
         } : false,
-        connectionTimeoutMillis: 10000,
-        statement_timeout: 8000,
-        query_timeout: 8000,
+        connectionTimeoutMillis: 4000,  // 4秒に短縮
+        statement_timeout: 2000,        // 2秒に短縮
+        query_timeout: 2000,            // 2秒に短縮
         application_name: 'elysion-create-user'
       });
       
@@ -876,9 +870,9 @@ export class PostgreSQLDatabase {
         ssl: process.env['NODE_ENV'] === 'production' ? {
           rejectUnauthorized: false
         } : false,
-        connectionTimeoutMillis: 15000,
-        statement_timeout: 12000,
-        query_timeout: 12000,
+        connectionTimeoutMillis: 6000,  // 6秒に短縮
+        statement_timeout: 4000,        // 4秒に短縮
+        query_timeout: 4000,            // 4秒に短縮
         application_name: 'elysion-transfer-money'
       });
       
