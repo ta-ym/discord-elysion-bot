@@ -30,7 +30,7 @@ export interface SalaryConfig {
 }
 
 export class PostgreSQLDatabase {
-  private connectionString: string;
+  private connectionString: string = '';
   private isConnected: boolean = false;
   private connectionAttempted: boolean = false;
 
@@ -436,7 +436,7 @@ export class PostgreSQLDatabase {
     } finally {
       if (client) {
         try {
-          await client.end();
+          await (client as Client).end();
         } catch (endError) {
           console.error('Client終了エラー:', endError);
         }
@@ -636,8 +636,20 @@ export class PostgreSQLDatabase {
     type: Transaction['type'],
     description?: string
   ): Promise<Transaction> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-create-transaction'
+      });
+      
+      await client.connect();
       const result = await client.query(
         `INSERT INTO transactions (from_user_id, to_user_id, amount, type, description) 
          VALUES ($1, $2, $3, $4, $5) 
@@ -646,10 +658,12 @@ export class PostgreSQLDatabase {
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error in createTransaction:', error);
+      console.error('createTransactionエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
@@ -658,8 +672,20 @@ export class PostgreSQLDatabase {
     limit: number = 10,
     offset: number = 0
   ): Promise<Transaction[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-get-transactions'
+      });
+      
+      await client.connect();
       const result = await client.query(
         `SELECT * FROM transactions 
          WHERE from_user_id = $1 OR to_user_id = $1 
@@ -669,32 +695,60 @@ export class PostgreSQLDatabase {
       );
       return result.rows;
     } catch (error) {
-      console.error('Error in getTransactionHistory:', error);
+      console.error('getTransactionHistoryエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
   // 月給関連メソッド
   async getSalaryConfigs(): Promise<SalaryConfig[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-get-salary-configs'
+      });
+      
+      await client.connect();
       const result = await client.query(
         'SELECT * FROM salary_configs WHERE enabled = TRUE ORDER BY amount DESC'
       );
       return result.rows;
     } catch (error) {
-      console.error('Error in getSalaryConfigs:', error);
+      console.error('getSalaryConfigsエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
   async setSalaryConfig(roleId: string, roleName: string, amount: number): Promise<SalaryConfig> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-set-salary-config'
+      });
+      
+      await client.connect();
       const result = await client.query(
         `INSERT INTO salary_configs (role_id, role_name, amount) 
          VALUES ($1, $2, $3) 
@@ -705,15 +759,29 @@ export class PostgreSQLDatabase {
       );
       return result.rows[0];
     } catch (error) {
-      console.error('Error in setSalaryConfig:', error);
+      console.error('setSalaryConfigエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
   async hasSalaryClaim(userId: string, month: string): Promise<boolean> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT COUNT(*) as count FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
@@ -724,7 +792,7 @@ export class PostgreSQLDatabase {
       console.error('Error in hasSalaryClaim:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
@@ -736,7 +804,19 @@ export class PostgreSQLDatabase {
     paidBy: string,
     description?: string
   ): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         `INSERT INTO monthly_salary_claims (user_id, role_id, amount, claim_month, paid_by, description) 
@@ -747,12 +827,24 @@ export class PostgreSQLDatabase {
       console.error('Error in createSalaryClaim:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getSalaryHistory(userId: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         `SELECT 
@@ -769,7 +861,7 @@ export class PostgreSQLDatabase {
       console.error('Error in getSalaryHistory:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
@@ -916,7 +1008,19 @@ export class PostgreSQLDatabase {
 
   // 管理者による支給（管理者ID付き）
   async adminGiveMoney(adminId: string, toId: string, amount: number, description: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query('BEGIN');
 
@@ -941,13 +1045,25 @@ export class PostgreSQLDatabase {
       console.error('Error in adminGiveMoney:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 月給支給メソッド
   async payMonthlySalary(userId: string, roleId: string, amount: number, paidBy: string, description?: string): Promise<boolean> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
     
     try {
@@ -1003,13 +1119,25 @@ export class PostgreSQLDatabase {
       });
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 月給支給状況確認
   async checkMonthlySalaryStatus(userId: string, month?: string): Promise<any> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     const targetMonth = month || new Date().toISOString().substring(0, 7);
     
     try {
@@ -1022,13 +1150,25 @@ export class PostgreSQLDatabase {
       console.error('Error in checkMonthlySalaryStatus:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 月給履歴取得
   async getMonthlySalaryHistory(userId: string, limit: number = 12): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM monthly_salary_claims WHERE user_id = $1 ORDER BY claim_month DESC LIMIT $2',
@@ -1039,13 +1179,25 @@ export class PostgreSQLDatabase {
       console.error('Error in getMonthlySalaryHistory:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 月給支給記録削除（ロールバック用）
   async deleteMonthlySalaryClaim(userId: string, month: string): Promise<boolean> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'DELETE FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2',
@@ -1056,13 +1208,25 @@ export class PostgreSQLDatabase {
       console.error('Error in deleteMonthlySalaryClaim:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 全ユーザー取得（balance-reset-all用）
   async getAllUsers(): Promise<User[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query('SELECT * FROM users ORDER BY discord_id');
       return result.rows;
@@ -1070,13 +1234,25 @@ export class PostgreSQLDatabase {
       console.error('Error in getAllUsers:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 給与詳細取得
   async getSalaryDetails(userId: string, month: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM monthly_salary_claims WHERE user_id = $1 AND claim_month = $2 ORDER BY created_at DESC',
@@ -1087,13 +1263,25 @@ export class PostgreSQLDatabase {
       console.error('Error in getSalaryDetails:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // Bulk Salary結果を保存
   async saveBulkSalaryResults(results: any[], processedBy: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query('BEGIN');
 
@@ -1130,13 +1318,25 @@ export class PostgreSQLDatabase {
       console.error('Error in saveBulkSalaryResults:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // 最新のBulk Salary結果を取得
   async getLatestBulkSalaryResults(processedBy: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       // 最新の1時間以内の結果を取得
       const result = await client.query(
@@ -1151,7 +1351,7 @@ export class PostgreSQLDatabase {
       console.error('Error in getLatestBulkSalaryResults:', error);
       return []; // エラーの場合は空配列を返す
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
@@ -1163,7 +1363,19 @@ export class PostgreSQLDatabase {
     
     try {
       return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
+        let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
         try {
           const result = await client.query(
             'SELECT * FROM temp_vcs WHERE channel_id = $1',
@@ -1171,7 +1383,7 @@ export class PostgreSQLDatabase {
           );
           return result.rows[0] || null;
         } finally {
-          client.release();
+          if (client) { await client.end(); }
         }
       }, 'getTempVC');
     } catch (error) {
@@ -1182,7 +1394,19 @@ export class PostgreSQLDatabase {
   }
 
   async addPublicVC(channelId: string, creatorId: string, channelName: string, description?: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         'INSERT INTO public_vcs (channel_id, creator_id, channel_name, description) VALUES ($1, $2, $3, $4)',
@@ -1192,12 +1416,24 @@ export class PostgreSQLDatabase {
       console.error('Error in addPublicVC:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getActivePublicVCs(): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM public_vcs ORDER BY last_activity DESC'
@@ -1207,12 +1443,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getActivePublicVCs:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getPublicVC(channelId: string): Promise<any | null> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM public_vcs WHERE channel_id = $1',
@@ -1223,12 +1471,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getPublicVC:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async removePublicVC(channelId: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         'DELETE FROM public_vcs WHERE channel_id = $1',
@@ -1238,12 +1498,24 @@ export class PostgreSQLDatabase {
       console.error('Error in removePublicVC:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async addTempVC(channelId: string, creatorId: string, channelName: string, durationHours: number, cost: number, expiresAt: Date): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         'INSERT INTO temp_vcs (channel_id, creator_id, channel_name, duration_hours, cost_ru, expires_at) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -1253,12 +1525,24 @@ export class PostgreSQLDatabase {
       console.error('Error in addTempVC:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getExpiredTempVCs(): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM temp_vcs WHERE expires_at <= NOW()'
@@ -1268,12 +1552,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getExpiredTempVCs:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async removeTempVC(channelId: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         'DELETE FROM temp_vcs WHERE channel_id = $1',
@@ -1283,7 +1579,7 @@ export class PostgreSQLDatabase {
       console.error('Error in removeTempVC:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
@@ -1296,7 +1592,19 @@ export class PostgreSQLDatabase {
     
     try {
       return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
+        let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
         try {
           const result = await client.query(
             'INSERT INTO voice_sessions (user_id, channel_id, has_angel_role) VALUES ($1, $2, $3) RETURNING id',
@@ -1304,7 +1612,7 @@ export class PostgreSQLDatabase {
           );
           return result.rows[0].id;
         } finally {
-          client.release();
+          if (client) { await client.end(); }
         }
       }, 'startVoiceSession');
     } catch (error) {
@@ -1328,14 +1636,26 @@ export class PostgreSQLDatabase {
     
     try {
       return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
+        let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
         try {
           await client.query(
             'UPDATE voice_sessions SET left_at = NOW() WHERE id = $1',
             [sessionId]
           );
         } finally {
-          client.release();
+          if (client) { await client.end(); }
         }
       }, 'endVoiceSession');
     } catch (error) {
@@ -1346,7 +1666,19 @@ export class PostgreSQLDatabase {
   }
 
   async updateVoiceTimeLog(userId: string, date: string, totalMinutes: number, angelMinutes: number): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         `INSERT INTO voice_time_logs (user_id, date, total_minutes, angel_role_minutes) 
@@ -1362,12 +1694,24 @@ export class PostgreSQLDatabase {
       console.error('Error in updateVoiceTimeLog:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getVoiceTimeStats(userId: string, startDate: string, endDate: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM voice_time_logs WHERE user_id = $1 AND date BETWEEN $2 AND $3',
@@ -1378,12 +1722,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getVoiceTimeStats:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getAngelRoleVoiceStats(startDate: string, endDate: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM voice_time_logs WHERE date BETWEEN $1 AND $2 AND angel_role_minutes > 0 ORDER BY angel_role_minutes DESC',
@@ -1394,12 +1750,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getAngelRoleVoiceStats:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getActiveVoiceSession(userId: string, channelId: string): Promise<any> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM voice_sessions WHERE user_id = $1 AND channel_id = $2 AND left_at IS NULL',
@@ -1410,13 +1778,25 @@ export class PostgreSQLDatabase {
       console.error('Error in getActiveVoiceSession:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   // Special VC methods
   async startSpecialVCSession(userId: string, _channelId: string, _channelName: string, vcType: string, _hasAngel: boolean): Promise<number> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'INSERT INTO special_vc_sessions (user_id, vc_type) VALUES ($1, $2) RETURNING id',
@@ -1427,12 +1807,24 @@ export class PostgreSQLDatabase {
       console.error('Error in startSpecialVCSession:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async endSpecialVCSession(sessionId: number): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       await client.query(
         'UPDATE special_vc_sessions SET left_at = NOW() WHERE id = $1',
@@ -1442,12 +1834,24 @@ export class PostgreSQLDatabase {
       console.error('Error in endSpecialVCSession:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async updateSpecialVCTimeLog(userId: string, date: string, corridorMinutes: number, evaluationMinutes: number, angelCorridorMinutes: number, angelEvaluationMinutes: number, vcType: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const sessionCount = 1; // 1回のセッション終了
       
@@ -1470,12 +1874,24 @@ export class PostgreSQLDatabase {
       console.error('Error in updateSpecialVCTimeLog:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getSpecialVCStats(userId: string, startDate: string, endDate: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       const result = await client.query(
         'SELECT * FROM special_vc_time_logs WHERE user_id = $1 AND date BETWEEN $2 AND $3',
@@ -1486,12 +1902,24 @@ export class PostgreSQLDatabase {
       console.error('Error in getSpecialVCStats:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
   async getSpecialVCRanking(vcType: string, startDate: string, endDate: string): Promise<any[]> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
+    client = new Client({
+      connectionString: this.connectionString,
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 8000,
+      query_timeout: 8000,
+      application_name: 'elysion-db-operation'
+    });
+    
+    await client.connect();
     try {
       let query: string;
       if (vcType === 'corridor') {
@@ -1509,7 +1937,7 @@ export class PostgreSQLDatabase {
       console.error('Error in getSpecialVCRanking:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) { await client.end(); }
     }
   }
 
@@ -1522,8 +1950,8 @@ export class PostgreSQLDatabase {
     return await this.getTransactionHistory(userId, limit);
   }
 
-  // 接続終了
+  // 接続終了（都度接続方式では不要）
   async close(): Promise<void> {
-    await this.pool.end();
+    console.log('都度接続方式のため、明示的な接続終了は不要です');
   }
 }
