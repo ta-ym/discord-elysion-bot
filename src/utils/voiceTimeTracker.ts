@@ -63,11 +63,21 @@ export class VoiceTimeTracker {
     try {
       // セッション開始
       const sessionId = await this.database.startVoiceSession(userId, channelId, hasAngel);
-      this.activeSessions.set(userId, sessionId);
-
-      console.log(`[VOICE JOIN] ${voiceState.member.displayName} joined ${voiceState.channel.name} ${hasAngel ? '(天使ロール)' : ''}`);
+      
+      // データベース接続なしの場合でもログを表示
+      if (sessionId === -1) {
+        console.warn(`[VOICE JOIN - DB 無効] ${voiceState.member.displayName} joined ${voiceState.channel.name} ${hasAngel ? '(天使ロール)' : ''}`);
+        // データベースなしでもセッションを記録（ローカルのみ）
+        this.activeSessions.set(userId, -1);
+      } else {
+        this.activeSessions.set(userId, sessionId);
+        console.log(`[VOICE JOIN] ${voiceState.member.displayName} joined ${voiceState.channel.name} ${hasAngel ? '(天使ロール)' : ''}`);
+      }
     } catch (error) {
       console.error('Error starting voice session:', error);
+      // エラーが発生してもローカルのセッション記録は保持
+      this.activeSessions.set(userId, -1);
+      console.warn(`[VOICE JOIN - エラー] ${voiceState.member.displayName} joined ${voiceState.channel.name} (データベース記録なし)`);
     }
   }
 
@@ -80,12 +90,17 @@ export class VoiceTimeTracker {
     const userId = voiceState.member.id;
     const sessionId = this.activeSessions.get(userId);
 
-    if (!sessionId) return;
+    if (sessionId === undefined) return;
 
     try {
-      // セッション終了
+      // セッション終了（sessionId が -1 の場合はスキップされる）
       await this.database.endVoiceSession(sessionId);
       this.activeSessions.delete(userId);
+      
+      if (sessionId === -1) {
+        console.warn(`[VOICE LEAVE - DB無効] ${voiceState.member.displayName} left ${voiceState.channel.name}`);
+        return;
+      }
 
       // セッション情報を取得して日次ログを更新
       const session = await this.getCompletedSession(sessionId);

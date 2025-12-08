@@ -31,6 +31,8 @@ export interface SalaryConfig {
 
 export class PostgreSQLDatabase {
   private pool: Pool;
+  private isConnected: boolean = false;
+  private connectionAttempted: boolean = false;
 
   constructor() {
     // DATABASE_URL環境変数のチェック
@@ -87,6 +89,8 @@ export class PostgreSQLDatabase {
         ]);
         
         console.log('PostgreSQL初期化成功');
+        this.isConnected = true;
+        this.connectionAttempted = true;
         return;
       } catch (error) {
         console.error(`PostgreSQL初期化試行 ${attempt} 失敗:`, error);
@@ -99,6 +103,8 @@ export class PostgreSQLDatabase {
         
         if (attempt === maxRetries) {
           console.error('PostgreSQL初期化の最大リトライ回数に達しました');
+          this.isConnected = false;
+          this.connectionAttempted = true;
           throw error; // 最後の試行で失敗した場合は例外を投げる
         }
         
@@ -329,12 +335,14 @@ export class PostgreSQLDatabase {
           )
         ]);
         
+        this.isConnected = true;
         return; // 成功したら終了
         
       } catch (error) {
         console.error(`PostgreSQLヘルスチェック試行 ${attempt} 失敗:`, error);
         
         if (attempt === maxRetries) {
+          this.isConnected = false;
           throw new Error(`PostgreSQL health check failed after ${maxRetries} attempts: ${error instanceof Error ? error.message : String(error)}`);
         }
         
@@ -353,6 +361,19 @@ export class PostgreSQLDatabase {
         }
       }
     }
+  }
+
+  // 接続状態チェックメソッド
+  private checkConnection(operationName: string): boolean {
+    if (!this.connectionAttempted) {
+      console.warn(`${operationName}: データベース初期化がまだ完了していません`);
+      return false;
+    }
+    if (!this.isConnected) {
+      console.warn(`${operationName}: PostgreSQLに接続できません。データベース機能は無効化されています`);
+      return false;
+    }
+    return true;
   }
 
   // データベース操作用のエラーハンドリングヘルパー
@@ -385,49 +406,79 @@ export class PostgreSQLDatabase {
 
   // ユーザー関連メソッド
   async getUser(discordId: string): Promise<User | null> {
-    return this.executeWithRetry(async () => {
-      const client = await this.pool.connect();
-      try {
-        const result = await client.query(
-          'SELECT * FROM users WHERE discord_id = $1',
-          [discordId]
-        );
-        return result.rows[0] || null;
-      } finally {
-        client.release();
-      }
-    }, 'getUser');
+    if (!this.checkConnection('getUser')) {
+      return null; // 接続なしの場合はnullを返す
+    }
+    
+    try {
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          const result = await client.query(
+            'SELECT * FROM users WHERE discord_id = $1',
+            [discordId]
+          );
+          return result.rows[0] || null;
+        } finally {
+          client.release();
+        }
+      }, 'getUser');
+    } catch (error) {
+      console.error('getUserエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      return null;
+    }
   }
 
   async createUser(discordId: string): Promise<User> {
-    return this.executeWithRetry(async () => {
-      const client = await this.pool.connect();
-      try {
-        const result = await client.query(
-          `INSERT INTO users (discord_id, balance) 
-           VALUES ($1, 10000) 
-           RETURNING *`,
-          [discordId]
-        );
-        return result.rows[0];
-      } finally {
-        client.release();
-      }
-    }, 'createUser');
+    if (!this.checkConnection('createUser')) {
+      throw new Error('データベースに接続できません。ユーザー作成できません。');
+    }
+    
+    try {
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          const result = await client.query(
+            `INSERT INTO users (discord_id, balance) 
+             VALUES ($1, 10000) 
+             RETURNING *`,
+            [discordId]
+          );
+          return result.rows[0];
+        } finally {
+          client.release();
+        }
+      }, 'createUser');
+    } catch (error) {
+      console.error('createUserエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      throw error;
+    }
   }
 
   async updateUserBalance(discordId: string, newBalance: number): Promise<void> {
-    return this.executeWithRetry(async () => {
-      const client = await this.pool.connect();
-      try {
-        await client.query(
-          'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
-          [newBalance, discordId]
-        );
-      } finally {
-        client.release();
-      }
-    }, 'updateUserBalance');
+    if (!this.checkConnection('updateUserBalance')) {
+      throw new Error('データベースに接続できません。残高更新できません。');
+    }
+    
+    try {
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          await client.query(
+            'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
+            [newBalance, discordId]
+          );
+        } finally {
+          client.release();
+        }
+      }, 'updateUserBalance');
+    } catch (error) {
+      console.error('updateUserBalanceエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      throw error;
+    }
   }
 
   // ユーザーの残高を設定（存在しない場合は作成）
@@ -937,18 +988,27 @@ export class PostgreSQLDatabase {
 
   // VC関連メソッド
   async getTempVC(channelId: string): Promise<any | null> {
-    const client = await this.pool.connect();
+    if (!this.checkConnection('getTempVC')) {
+      return null; // 接続なしの場合はnullを返す
+    }
+    
     try {
-      const result = await client.query(
-        'SELECT * FROM temp_vcs WHERE channel_id = $1',
-        [channelId]
-      );
-      return result.rows[0] || null;
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          const result = await client.query(
+            'SELECT * FROM temp_vcs WHERE channel_id = $1',
+            [channelId]
+          );
+          return result.rows[0] || null;
+        } finally {
+          client.release();
+        }
+      }, 'getTempVC');
     } catch (error) {
-      console.error('Error in getTempVC:', error);
-      throw error;
-    } finally {
-      client.release();
+      console.error('getTempVCエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      return null;
     }
   }
 
@@ -1060,33 +1120,59 @@ export class PostgreSQLDatabase {
 
   // Voice session tracking methods
   async startVoiceSession(userId: string, channelId: string, hasAngel: boolean): Promise<number> {
-    const client = await this.pool.connect();
+    if (!this.checkConnection('startVoiceSession')) {
+      console.warn('ボイスセッション追跡はデータベース接続なしでスキップされました');
+      return -1; // ダミーIDを返す
+    }
+    
     try {
-      const result = await client.query(
-        'INSERT INTO voice_sessions (user_id, channel_id, has_angel_role) VALUES ($1, $2, $3) RETURNING id',
-        [userId, channelId, hasAngel]
-      );
-      return result.rows[0].id;
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          const result = await client.query(
+            'INSERT INTO voice_sessions (user_id, channel_id, has_angel_role) VALUES ($1, $2, $3) RETURNING id',
+            [userId, channelId, hasAngel]
+          );
+          return result.rows[0].id;
+        } finally {
+          client.release();
+        }
+      }, 'startVoiceSession');
     } catch (error) {
-      console.error('Error in startVoiceSession:', error);
-      throw error;
-    } finally {
-      client.release();
+      console.error('startVoiceSessionエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      return -1; // エラー時はダミーIDを返す
     }
   }
 
   async endVoiceSession(sessionId: number): Promise<void> {
-    const client = await this.pool.connect();
+    if (!this.checkConnection('endVoiceSession')) {
+      console.warn('ボイスセッション終了はデータベース接続なしでスキップされました');
+      return; // 接続なしの場合は何もしない
+    }
+    
+    // セッションIDが-1の場合（startVoiceSessionが失敗した場合）はスキップ
+    if (sessionId === -1) {
+      console.warn('無効なセッションID (-1) のため、endVoiceSessionをスキップしました');
+      return;
+    }
+    
     try {
-      await client.query(
-        'UPDATE voice_sessions SET left_at = NOW() WHERE id = $1',
-        [sessionId]
-      );
+      return await this.executeWithRetry(async () => {
+        const client = await this.pool.connect();
+        try {
+          await client.query(
+            'UPDATE voice_sessions SET left_at = NOW() WHERE id = $1',
+            [sessionId]
+          );
+        } finally {
+          client.release();
+        }
+      }, 'endVoiceSession');
     } catch (error) {
-      console.error('Error in endVoiceSession:', error);
-      throw error;
-    } finally {
-      client.release();
+      console.error('endVoiceSessionエラー、接続状態をリセット:', error);
+      this.isConnected = false;
+      // エラーが発生してもボイスイベント処理は継続する
     }
   }
 
