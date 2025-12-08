@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Client } from 'pg';
 
 // インターフェース定義（既存のものをインポート）
 export interface User {
@@ -30,7 +30,7 @@ export interface SalaryConfig {
 }
 
 export class PostgreSQLDatabase {
-  private pool!: Pool; // 確定的代入アサーション
+  private connectionString: string;
   private isConnected: boolean = false;
   private connectionAttempted: boolean = false;
 
@@ -83,20 +83,10 @@ export class PostgreSQLDatabase {
     // Railway PostgreSQL簡素接続設定（診断用）
     console.log('🔍 Railway PostgreSQL接続診断を開始...');
     
-    // 常にpoolを作成（エラー時はダミー）
-    this.pool = new Pool({
-      connectionString: process.env['DATABASE_URL'] || 'postgresql://dummy:dummy@localhost:5432/dummy',
-      // Railway SSL設定を明確化
-      ssl: process.env['NODE_ENV'] === 'production' ? {
-        rejectUnauthorized: false
-      } : false,
-      // 最小限の接続設定
-      connectionTimeoutMillis: 10000, // 10秒で早期判定
-      idleTimeoutMillis: 30000,
-      max: 1,
-      min: 0,
-      application_name: 'elysion-bot-diagnostic'
-    });
+    // Railway環境用: 接続プールを廃止、都度接続方式を採用
+    this.connectionString = process.env['DATABASE_URL'] || 'postgresql://dummy:dummy@localhost:5432/dummy';
+    
+    console.log('🚀 Railway用新接続モード: プールなし・都度接続方式');
     
     // Railway接続診断情報を追加
     console.log('🔍 Railway環境変数チェック:');
@@ -104,103 +94,117 @@ export class PostgreSQLDatabase {
     console.log(`   RAILWAY_ENVIRONMENT: ${process.env['RAILWAY_ENVIRONMENT']}`);
     console.log(`   PORT: ${process.env['PORT']}`);
 
-    // Railway診断モードで接続テスト
-    console.log('🚀 Railway PostgreSQL診断モードで初期化...');
-    this.performDiagnosticTest();
+    // Railway新接続モードでテスト
+    console.log('🚀 Railway新接続モードで初期化...');
+    this.performDirectConnectionTest();
   }
 
-  // Railway PostgreSQL診断メソッド
-  private performDiagnosticTest(): void {
+  // Railway都度接続方式の診断メソッド
+  private performDirectConnectionTest(): void {
     setTimeout(async () => {
-      console.log('='.repeat(50));
-      console.log('🔍 Railway PostgreSQL 接続診断開始');
-      console.log('='.repeat(50));
+      console.log('='.repeat(60));
+      console.log('🆕 Railway PostgreSQL 都度接続テスト開始');
+      console.log('='.repeat(60));
       
       try {
-        // Step 1: プール状態をチェック
-        console.log('🔍 Step 1: プール状態チェック...');
-        console.log(`   総接続数: ${this.pool.totalCount}`);
-        console.log(`   アイドル接続: ${this.pool.idleCount}`);
-        console.log(`   待機中: ${this.pool.waitingCount}`);
-        
-        // Step 2: 簡単な接続テスト
-        console.log('🔍 Step 2: 接続テスト実行中...');
+        console.log('🔍 Step 1: 直接接続テスト...');
         const startTime = Date.now();
         
-        const client = await this.pool.connect();
-        const connectTime = Date.now() - startTime;
-        console.log(`✅ 接続成功 (${connectTime}ms)`);
+        // 都度接続方式で接続テスト
+        const client = new Client({
+          connectionString: this.connectionString,
+          ssl: process.env['NODE_ENV'] === 'production' ? {
+            rejectUnauthorized: false
+          } : false,
+          connectionTimeoutMillis: 15000, // 15秒タイムアウト
+          statement_timeout: 10000,       // 10秒ステートメントタイムアウト
+          query_timeout: 10000,           // 10秒クエリタイムアウト
+          application_name: 'elysion-bot-direct'
+        });
         
-        // Step 3: 簡単なクエリテスト
-        console.log('🔍 Step 3: クエリテスト実行中...');
+        await client.connect();
+        const connectTime = Date.now() - startTime;
+        console.log(`✅ 直接接続成功 (${connectTime}ms)`);
+        
+        // Step 2: 基本クエリテスト
+        console.log('🔍 Step 2: 基本クエリテスト...');
         const queryStartTime = Date.now();
-        const result = await client.query('SELECT version(), current_database(), current_user');
+        const result = await client.query('SELECT version(), current_database(), current_user, NOW()');
         const queryTime = Date.now() - queryStartTime;
         
         console.log(`✅ クエリ成功 (${queryTime}ms)`);
-        console.log(`   PostgreSQLバージョン: ${result.rows[0].version.split(' ')[0]} ${result.rows[0].version.split(' ')[1]}`);
-        console.log(`   データベース名: ${result.rows[0].current_database}`);
-        console.log(`   ユーザー名: ${result.rows[0].current_user}`);
+        console.log(`   PostgreSQL: ${result.rows[0].version.split(' ')[1]}`);
+        console.log(`   データベース: ${result.rows[0].current_database}`);
+        console.log(`   ユーザー: ${result.rows[0].current_user}`);
+        console.log(`   サーバー時間: ${result.rows[0].now}`);
         
-        client.release();
+        await client.end();
         
-        // Step 4: テーブル初期化テスト
-        console.log('🔍 Step 4: テーブル初期化テスト...');
+        // Step 3: テーブル初期化テスト
+        console.log('🔍 Step 3: テーブル初期化テスト...');
         await this.initializeTables();
         
         this.isConnected = true;
         this.connectionAttempted = true;
         
-        console.log('='.repeat(50));
-        console.log('✅ Railway PostgreSQL 診断結果: 成功');
-        console.log(`   接続時間: ${connectTime}ms`);
-        console.log(`   クエリ時間: ${queryTime}ms`);
-        console.log(`   総時間: ${Date.now() - startTime}ms`);
-        console.log('✅ データベース機能が利用可能です');
-        console.log('='.repeat(50));
+        console.log('='.repeat(60));
+        console.log('🎉 Railway都度接続モード: 成功！');
+        console.log(`⚡ 接続時間: ${connectTime}ms`);
+        console.log(`📊 クエリ時間: ${queryTime}ms`);
+        console.log(`🎯 総処理時間: ${Date.now() - startTime}ms`);
+        console.log('✅ データベース機能が利用可能です（プールなし方式）');
+        console.log('='.repeat(60));
         
       } catch (error) {
         this.isConnected = false;
         this.connectionAttempted = true;
         
-        console.log('='.repeat(50));
-        console.log('❌ Railway PostgreSQL 診断結果: 失敗');
-        console.log('='.repeat(50));
-        console.log(`エラータイプ: ${error instanceof Error ? error.constructor.name : 'Unknown'}`);
-        console.log(`エラーメッセージ: ${error instanceof Error ? error.message : error}`);
+        console.log('='.repeat(60));
+        console.log('❌ Railway都度接続モード: 失敗');
+        console.log('='.repeat(60));
+        console.log(`🚨 エラー: ${error instanceof Error ? error.message : error}`);
         
-        // エラー種別による原因特定
+        // Railway特有のエラー分析
         if (error instanceof Error) {
-          if (error.message.includes('timeout')) {
-            console.log('🔍 原因分析: タイムアウトエラー');
-            console.log('   - Railwayサービスの応答が遅い');
-            console.log('   - ネットワーク遅延またはリソース不足');
-          } else if (error.message.includes('connect')) {
-            console.log('🔍 原因分析: 接続エラー');
-            console.log('   - DATABASE_URLが正しくない可能性');
-            console.log('   - Railway PostgreSQLサービスが停止中');
-          } else if (error.message.includes('auth')) {
-            console.log('🔍 原因分析: 認証エラー');
-            console.log('   - ユーザー名またはパスワードが間違っている');
-          } else if (error.message.includes('ssl')) {
-            console.log('🔍 原因分析: SSLエラー');
-            console.log('   - SSL設定がRailway環境と不一致');
+          if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+            console.log('📋 診断結果: Railway接続タイムアウト');
+            console.log('   💡 推奨解決策:');
+            console.log('   - Railway PostgreSQLプラグインの再起動');
+            console.log('   - 外部データベースサービスへの移行検討');
+            console.log('   - SQLiteローカルDBへの切り替え');
+          } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+            console.log('📋 診断結果: Railway PostgreSQLサービス未起動');
+            console.log('   💡 推奨解決策:');
+            console.log('   - Railwayダッシュボードでサービス状態確認');
+            console.log('   - DATABASE_URL環境変数の再設定');
           }
         }
         
-        console.log('🔄 フォールバックモードでボットを継続動作');
-        console.log('='.repeat(50));
+        console.log('🔄 フォールバックモードで継続動作します');
+        console.log('='.repeat(60));
       }
-    }, 3000); // 3秒待機
+    }, 2000); // 2秒待機
   }
 
   private async initializeTables(): Promise<void> {
-    console.log('📊 データベーステーブルを初期化中...');
-    const client = await this.pool.connect();
+    console.log('📊 データベーステーブルを初期化中（都度接続）...');
     
+    let client: Client | null = null;
     try {
-      // Railway環境での安全なトランザクション開始
-      console.log('🔄 トランザクション開始...');
+      // 都度接続でテーブル初期化
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 25000,
+        statement_timeout: 20000,
+        query_timeout: 20000,
+        application_name: 'elysion-init-tables'
+      });
+      
+      await client.connect();
+      console.log('🔄 都度接続トランザクション開始...');
       await client.query('BEGIN');
 
       // ユーザーテーブル
@@ -372,26 +376,45 @@ export class PostgreSQLDatabase {
       }
 
       await client.query('COMMIT');
-      console.log('PostgreSQL全テーブル初期化完了');
+      console.log('✅ PostgreSQL全テーブル初期化完了（都度接続）');
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Error initializing PostgreSQL tables:', error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('ロールバックエラー:', rollbackError);
+        }
+      }
+      console.error('❌ テーブル初期化エラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
-  // 簡略化されたヘルスチェック（Railway環境対応）
+  // 都度接続ヘルスチェック（Railway環境対応）
   async healthCheck(): Promise<void> {
-    console.log('🏥 PostgreSQL簡易ヘルスチェック実行中...');
+    console.log('🏥 PostgreSQL都度接続ヘルスチェック実行中...');
     
-    let client: any = null;
+    let client: Client | null = null;
     try {
       // 5秒でタイムアウトする簡単なチェック
       const quickCheck = (async () => {
-        client = await this.pool.connect();
-        const result = await client.query('SELECT 1 as health_check');
+        client = new Client({
+          connectionString: this.connectionString,
+          ssl: process.env['NODE_ENV'] === 'production' ? {
+            rejectUnauthorized: false
+          } : false,
+          connectionTimeoutMillis: 8000,
+          statement_timeout: 5000,
+          query_timeout: 5000,
+          application_name: 'elysion-health-check'
+        });
+        
+        await client.connect();
+        const result = await client.query('SELECT 1 as health_check, NOW() as server_time');
         return result;
       })();
       
@@ -403,19 +426,19 @@ export class PostgreSQLDatabase {
       ]);
       
       this.isConnected = true;
-      console.log('✅ PostgreSQLヘルスチェック成功');
+      console.log('✅ PostgreSQL都度接続ヘルスチェック成功');
       
     } catch (error) {
       this.isConnected = false;
-      console.warn('❌ PostgreSQLヘルスチェック失敗:', error instanceof Error ? error.message : error);
+      console.warn('❌ PostgreSQL都度接続ヘルスチェック失敗:', error instanceof Error ? error.message : error);
       throw error;
       
     } finally {
       if (client) {
         try {
-          client.release();
-        } catch (releaseError) {
-          console.error('Client release error:', releaseError);
+          await client.end();
+        } catch (endError) {
+          console.error('Client終了エラー:', endError);
         }
       }
     }
@@ -468,23 +491,34 @@ export class PostgreSQLDatabase {
       return null; // 接続なしの場合はnullを返す
     }
     
+    let client: Client | null = null;
     try {
-      return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
-        try {
-          const result = await client.query(
-            'SELECT * FROM users WHERE discord_id = $1',
-            [discordId]
-          );
-          return result.rows[0] || null;
-        } finally {
-          client.release();
-        }
-      }, 'getUser');
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-get-user'
+      });
+      
+      await client.connect();
+      const result = await client.query(
+        'SELECT * FROM users WHERE discord_id = $1',
+        [discordId]
+      );
+      return result.rows[0] || null;
+      
     } catch (error) {
-      console.error('getUserエラー、接続状態をリセット:', error);
+      console.error('getUserエラー（都度接続）:', error);
       this.isConnected = false;
       return null;
+    } finally {
+      if (client) {
+        await client.end();
+      }
     }
   }
 
@@ -493,25 +527,36 @@ export class PostgreSQLDatabase {
       throw new Error('データベースに接続できません。ユーザー作成できません。');
     }
     
+    let client: Client | null = null;
     try {
-      return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
-        try {
-          const result = await client.query(
-            `INSERT INTO users (discord_id, balance) 
-             VALUES ($1, 10000) 
-             RETURNING *`,
-            [discordId]
-          );
-          return result.rows[0];
-        } finally {
-          client.release();
-        }
-      }, 'createUser');
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-create-user'
+      });
+      
+      await client.connect();
+      const result = await client.query(
+        `INSERT INTO users (discord_id, balance) 
+         VALUES ($1, 10000) 
+         RETURNING *`,
+        [discordId]
+      );
+      return result.rows[0];
+      
     } catch (error) {
-      console.error('createUserエラー、接続状態をリセット:', error);
+      console.error('createUserエラー（都度接続）:', error);
       this.isConnected = false;
       throw error;
+    } finally {
+      if (client) {
+        await client.end();
+      }
     }
   }
 
@@ -520,29 +565,52 @@ export class PostgreSQLDatabase {
       throw new Error('データベースに接続できません。残高更新できません。');
     }
     
+    let client: Client | null = null;
     try {
-      return await this.executeWithRetry(async () => {
-        const client = await this.pool.connect();
-        try {
-          await client.query(
-            'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
-            [newBalance, discordId]
-          );
-        } finally {
-          client.release();
-        }
-      }, 'updateUserBalance');
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-update-balance'
+      });
+      
+      await client.connect();
+      await client.query(
+        'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
+        [newBalance, discordId]
+      );
+      
     } catch (error) {
-      console.error('updateUserBalanceエラー、接続状態をリセット:', error);
+      console.error('updateUserBalanceエラー（都度接続）:', error);
       this.isConnected = false;
       throw error;
+    } finally {
+      if (client) {
+        await client.end();
+      }
     }
   }
 
   // ユーザーの残高を設定（存在しない場合は作成）
   async setUserBalance(discordId: string, newBalance: number): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 8000,
+        query_timeout: 8000,
+        application_name: 'elysion-set-balance'
+      });
+      
+      await client.connect();
       await client.query(
         `INSERT INTO users (discord_id, balance) VALUES ($1, $2)
          ON CONFLICT(discord_id) DO UPDATE SET 
@@ -551,10 +619,12 @@ export class PostgreSQLDatabase {
         [discordId, newBalance]
       );
     } catch (error) {
-      console.error('Error in setUserBalance:', error);
+      console.error('setUserBalanceエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
@@ -705,9 +775,22 @@ export class PostgreSQLDatabase {
 
   // 送金処理
   async transferMoney(fromId: string, toId: string, amount: number, description: string): Promise<boolean> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
-      console.log(`[POSTGRES] Starting transferMoney: ${fromId} -> ${toId}, amount: ${amount}`);
+      console.log(`[POSTGRES] Starting transferMoney（都度接続）: ${fromId} -> ${toId}, amount: ${amount}`);
+      
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 15000,
+        statement_timeout: 12000,
+        query_timeout: 12000,
+        application_name: 'elysion-transfer-money'
+      });
+      
+      await client.connect();
       await client.query('BEGIN');
 
       // 送金者の残高チェック
@@ -760,22 +843,42 @@ export class PostgreSQLDatabase {
       console.log(`[POSTGRES] Transaction recorded, affected rows:`, insertTransaction.rowCount);
 
       await client.query('COMMIT');
-      console.log(`[POSTGRES] Transfer completed successfully`);
+      console.log(`[POSTGRES] 都度接続 Transfer completed successfully`);
       return true;
 
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Error in transferMoney:', error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Rollback error:', rollbackError);
+        }
+      }
+      console.error('transferMoneyエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
   // 管理者による支給（残高チェック不要）
   async giveMoney(toId: string, amount: number, description: string): Promise<void> {
-    const client = await this.pool.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 15000,
+        statement_timeout: 12000,
+        query_timeout: 12000,
+        application_name: 'elysion-give-money'
+      });
+      
+      await client.connect();
       await client.query('BEGIN');
 
       // 受取人の残高を増額（ユーザーが存在しない場合は作成）
@@ -795,11 +898,19 @@ export class PostgreSQLDatabase {
       await client.query('COMMIT');
 
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Error in giveMoney:', error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Rollback error:', rollbackError);
+        }
+      }
+      console.error('giveMoneyエラー（都度接続）:', error);
       throw error;
     } finally {
-      client.release();
+      if (client) {
+        await client.end();
+      }
     }
   }
 
