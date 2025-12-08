@@ -30,7 +30,7 @@ export interface SalaryConfig {
 }
 
 export class PostgreSQLDatabase {
-  private pool: Pool;
+  private pool!: Pool; // 確定的代入アサーション
   private isConnected: boolean = false;
   private connectionAttempted: boolean = false;
 
@@ -40,91 +40,158 @@ export class PostgreSQLDatabase {
       throw new Error('DATABASE_URL環境変数が設定されていません');
     }
 
-    // Railway接続情報の詳細表示
+    // Railway DATABASE_URL詳細検証
     const dbUrl = process.env['DATABASE_URL'];
-    if (dbUrl) {
-      try {
-        const url = new URL(dbUrl);
-        console.log('🔗 PostgreSQL接続情報:');
-        console.log(`   ホスト: ${url.hostname}`);
-        console.log(`   ポート: ${url.port}`);
-        console.log(`   データベース: ${url.pathname.slice(1)}`);
-        console.log(`   ユーザー: ${url.username}`);
-        console.log(`   SSL: ${url.searchParams.get('sslmode') || 'default'}`);
-        console.log(`   本番環境: ${process.env['NODE_ENV'] === 'production'}`);
-      } catch (error) {
-        console.log('PostgreSQL接続情報:', {
-          url: dbUrl.replace(/:[^:@]*@/, ':****@'), // パスワード隠す
-          isProduction: process.env['NODE_ENV'] === 'production'
-        });
+    console.log('🔗 Railway DATABASE_URL検証:');
+    
+    if (!dbUrl) {
+      console.error('❌ DATABASE_URL環境変数が未設定');
+      console.error('   Railway環境変数を確認してください');
+      return;
+    }
+    
+    try {
+      const url = new URL(dbUrl);
+      console.log(`   ✅ URL形式: 正常`);
+      console.log(`   📡 ホスト: ${url.hostname}`);
+      console.log(`   🔌 ポート: ${url.port || '5432'}`);
+      console.log(`   💾 データベース: ${url.pathname.slice(1) || 'なし'}`);
+      console.log(`   👤 ユーザー: ${url.username || 'なし'}`);
+      console.log(`   🔐 パスワード: ${url.password ? '設定済み' : '未設定'}`);
+      
+      // SSL設定チェック
+      const sslMode = url.searchParams.get('sslmode');
+      console.log(`   🔒 SSL設定: ${sslMode || 'なし'}`);
+      
+      // Railway特有のホスト名チェック
+      if (!url.hostname.includes('railway.app')) {
+        console.warn(`   ⚠️  警告: Railwayホスト名ではありません (${url.hostname})`);
       }
-    } else {
-      console.error('❌ DATABASE_URL環境変数が設定されていません');
+      
+      // ポート番号チェック
+      if (url.port && url.port !== '5432') {
+        console.warn(`   ⚠️  警告: 標準ポート(5432)ではありません (${url.port})`);
+      }
+      
+    } catch (error) {
+      console.error('❌ DATABASE_URL形式エラー:', error instanceof Error ? error.message : error);
+      console.error('   URL形式が正しくない可能性があります');
+      // エラー時はダミープールを作成
+      console.log('🔧 ダミープールで初期化を継続します');
     }
 
-    // Railway PostgreSQL接続設定（超安定性重視）
+    // Railway PostgreSQL簡素接続設定（診断用）
+    console.log('🔍 Railway PostgreSQL接続診断を開始...');
+    
+    // 常にpoolを作成（エラー時はダミー）
     this.pool = new Pool({
-      connectionString: process.env['DATABASE_URL'],
-      ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
-      // Railway環境用の超寛容な接続設定
-      connectionTimeoutMillis: 60000, // 60秒でタイムアウト（大幅延長）
-      idleTimeoutMillis: 60000, // 60秒でアイドル接続を終了
-      max: 1, // 最大接続数を1に制限（Railway制限対応）
-      min: 0, // 最小接続数は0
-      // クエリタイムアウト設定
-      query_timeout: 30000, // 30秒でクエリタイムアウト
-      // 接続設定
-      application_name: 'elysion-bot',
-      // Railway環境での超安定性設定
-      statement_timeout: 30000, // ステートメントタイムアウト延長
-      idle_in_transaction_session_timeout: 20000, // トランザクション内アイドルタイムアウト延長
-      // 接続リトライ設定強化
-      keepAlive: true,
-      keepAliveInitialDelayMillis: 30000
+      connectionString: process.env['DATABASE_URL'] || 'postgresql://dummy:dummy@localhost:5432/dummy',
+      // Railway SSL設定を明確化
+      ssl: process.env['NODE_ENV'] === 'production' ? {
+        rejectUnauthorized: false
+      } : false,
+      // 最小限の接続設定
+      connectionTimeoutMillis: 10000, // 10秒で早期判定
+      idleTimeoutMillis: 30000,
+      max: 1,
+      min: 0,
+      application_name: 'elysion-bot-diagnostic'
     });
+    
+    // Railway接続診断情報を追加
+    console.log('🔍 Railway環境変数チェック:');
+    console.log(`   NODE_ENV: ${process.env['NODE_ENV']}`);
+    console.log(`   RAILWAY_ENVIRONMENT: ${process.env['RAILWAY_ENVIRONMENT']}`);
+    console.log(`   PORT: ${process.env['PORT']}`);
 
-    // Railway環境対応: シンプルな非同期初期化
-    console.log('🚀 Railway環境でのPostgreSQL初期化を開始...');
-    this.performSimpleInitialization();
+    // Railway診断モードで接続テスト
+    console.log('🚀 Railway PostgreSQL診断モードで初期化...');
+    this.performDiagnosticTest();
   }
 
-  // Railway環境用のシンプル初期化メソッド
-  private performSimpleInitialization(): void {
-    // 非同期で実行し、結果に関係なく続行
+  // Railway PostgreSQL診断メソッド
+  private performDiagnosticTest(): void {
     setTimeout(async () => {
+      console.log('='.repeat(50));
+      console.log('🔍 Railway PostgreSQL 接続診断開始');
+      console.log('='.repeat(50));
+      
       try {
-        console.log('🔍 PostgreSQL接続をテスト中...');
+        // Step 1: プール状態をチェック
+        console.log('🔍 Step 1: プール状態チェック...');
+        console.log(`   総接続数: ${this.pool.totalCount}`);
+        console.log(`   アイドル接続: ${this.pool.idleCount}`);
+        console.log(`   待機中: ${this.pool.waitingCount}`);
         
-        // 10秒でタイムアウトする簡単なテスト
-        const testConnection = this.pool.connect();
-        const timeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Railway quick test timeout')), 10000)
-        );
+        // Step 2: 簡単な接続テスト
+        console.log('🔍 Step 2: 接続テスト実行中...');
+        const startTime = Date.now();
         
-        const client = await Promise.race([testConnection, timeout]) as any;
+        const client = await this.pool.connect();
+        const connectTime = Date.now() - startTime;
+        console.log(`✅ 接続成功 (${connectTime}ms)`);
         
-        // 接続成功したらテーブル初期化を試行
-        await this.initializeTables();
+        // Step 3: 簡単なクエリテスト
+        console.log('🔍 Step 3: クエリテスト実行中...');
+        const queryStartTime = Date.now();
+        const result = await client.query('SELECT version(), current_database(), current_user');
+        const queryTime = Date.now() - queryStartTime;
+        
+        console.log(`✅ クエリ成功 (${queryTime}ms)`);
+        console.log(`   PostgreSQLバージョン: ${result.rows[0].version.split(' ')[0]} ${result.rows[0].version.split(' ')[1]}`);
+        console.log(`   データベース名: ${result.rows[0].current_database}`);
+        console.log(`   ユーザー名: ${result.rows[0].current_user}`);
+        
         client.release();
+        
+        // Step 4: テーブル初期化テスト
+        console.log('🔍 Step 4: テーブル初期化テスト...');
+        await this.initializeTables();
         
         this.isConnected = true;
         this.connectionAttempted = true;
-        console.log('✅ PostgreSQL接続成功 - データベース機能が利用可能です');
+        
+        console.log('='.repeat(50));
+        console.log('✅ Railway PostgreSQL 診断結果: 成功');
+        console.log(`   接続時間: ${connectTime}ms`);
+        console.log(`   クエリ時間: ${queryTime}ms`);
+        console.log(`   総時間: ${Date.now() - startTime}ms`);
+        console.log('✅ データベース機能が利用可能です');
+        console.log('='.repeat(50));
         
       } catch (error) {
         this.isConnected = false;
         this.connectionAttempted = true;
         
-        console.log('='.repeat(60));
-        console.log('🚀 Railway PostgreSQL 接続ステータス');
-        console.log('='.repeat(60));
-        console.log('⚠️  状態: データベース接続失敗');
-        console.log('🔄 ボット: 正常動作中 (データベース機能無し)');
-        console.log('💫 影響: 通貨・ボイス追跡機能のみ無効');
-        console.log('🔄 復旧: 5分間隔で自動再試行');
-        console.log('='.repeat(60));
+        console.log('='.repeat(50));
+        console.log('❌ Railway PostgreSQL 診断結果: 失敗');
+        console.log('='.repeat(50));
+        console.log(`エラータイプ: ${error instanceof Error ? error.constructor.name : 'Unknown'}`);
+        console.log(`エラーメッセージ: ${error instanceof Error ? error.message : error}`);
+        
+        // エラー種別による原因特定
+        if (error instanceof Error) {
+          if (error.message.includes('timeout')) {
+            console.log('🔍 原因分析: タイムアウトエラー');
+            console.log('   - Railwayサービスの応答が遅い');
+            console.log('   - ネットワーク遅延またはリソース不足');
+          } else if (error.message.includes('connect')) {
+            console.log('🔍 原因分析: 接続エラー');
+            console.log('   - DATABASE_URLが正しくない可能性');
+            console.log('   - Railway PostgreSQLサービスが停止中');
+          } else if (error.message.includes('auth')) {
+            console.log('🔍 原因分析: 認証エラー');
+            console.log('   - ユーザー名またはパスワードが間違っている');
+          } else if (error.message.includes('ssl')) {
+            console.log('🔍 原因分析: SSLエラー');
+            console.log('   - SSL設定がRailway環境と不一致');
+          }
+        }
+        
+        console.log('🔄 フォールバックモードでボットを継続動作');
+        console.log('='.repeat(50));
       }
-    }, 5000); // 5秒待機してから実行
+    }, 3000); // 3秒待機
   }
 
   private async initializeTables(): Promise<void> {
