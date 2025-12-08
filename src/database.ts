@@ -116,31 +116,51 @@ export class Database {
     
     this.pgDb = new PostgreSQLDatabase();
 
-    // PostgreSQL接続の健全性チェック（Railway用に遅延実行）
+    // PostgreSQL接続の健全性チェック（Railway用に大幅遅延実行）
     setTimeout(async () => {
       try {
-        console.log('PostgreSQL接続チェック開始...');
+        console.log('Railway環境でのPostgreSQL接続チェック開始...');
+        console.log('接続に時間がかかる場合があります。お待ちください...');
         await this.checkPostgreSQLHealth();
         console.log('PostgreSQL接続確認完了 - 全機能利用可能');
       } catch (healthError) {
         console.error('PostgreSQL接続失敗:', healthError);
         console.error('エラー詳細:', healthError instanceof Error ? healthError.stack : healthError);
         
-        // 本番環境では接続失敗時にプロセスを終了
+        // Railway環境では接続失敗を一時的な問題として扱う
         if (process.env.NODE_ENV === 'production') {
-          console.error('本番環境でのPostgreSQL接続失敗により、プロセスを終了します');
-          process.exit(1);
+          console.error('Railway環境でのPostgreSQL接続失敗を検出しました');
+          console.error('データベース機能は無効化されますが、ボットは継続動作します');
+          console.warn('データベース接続の復旧を試み続けます...');
+          
+          // 接続復旧を定期的に試行
+          this.scheduleConnectionRetry();
         } else {
           console.warn('開発環境のため、PostgreSQL接続失敗を警告として扱います');
         }
       }
-    }, 10000); // Railway環境を考慮して10秒に延長
+    }, 30000); // Railway環境を考慮して30秒に大幅延長
   }
 
   // PostgreSQL健全性チェック
   private async checkPostgreSQLHealth(): Promise<void> {
     await this.pgDb.healthCheck();
     console.log('PostgreSQL健全性チェック完了');
+  }
+
+  // 接続復旧の定期試行（Railway環境用）
+  private scheduleConnectionRetry(): void {
+    console.log('PostgreSQL接続復旧スケジュールを開始します（5分間隔）');
+    
+    setInterval(async () => {
+      try {
+        console.log('PostgreSQL接続復旧を試行中...');
+        await this.checkPostgreSQLHealth();
+        console.log('PostgreSQL接続復旧成功！データベース機能が利用可能になりました');
+      } catch (retryError) {
+        console.log('PostgreSQL接続復旧失敗。次回試行は5分後です');
+      }
+    }, 5 * 60 * 1000); // 5分間隔で復旧を試行
   }
 
   // ユーザー関連メソッド（PostgreSQL専用）

@@ -43,44 +43,46 @@ export class PostgreSQLDatabase {
       isProduction: process.env['NODE_ENV'] === 'production'
     });
 
-    // Railway PostgreSQL接続設定（安定性重視）
+    // Railway PostgreSQL接続設定（超安定性重視）
     this.pool = new Pool({
       connectionString: process.env['DATABASE_URL'],
       ssl: process.env['NODE_ENV'] === 'production' ? { rejectUnauthorized: false } : false,
-      // Railway環境用の安定した接続設定
-      connectionTimeoutMillis: 30000, // 30秒でタイムアウト（Railway用に延長）
-      idleTimeoutMillis: 30000, // 30秒でアイドル接続を終了
-      max: 3, // 最大接続数を抑制（Railway制限対応）
+      // Railway環境用の超寛容な接続設定
+      connectionTimeoutMillis: 60000, // 60秒でタイムアウト（大幅延長）
+      idleTimeoutMillis: 60000, // 60秒でアイドル接続を終了
+      max: 1, // 最大接続数を1に制限（Railway制限対応）
       min: 0, // 最小接続数は0
       // クエリタイムアウト設定
-      query_timeout: 15000, // 15秒でクエリタイムアウト
+      query_timeout: 30000, // 30秒でクエリタイムアウト
       // 接続設定
       application_name: 'elysion-bot',
-      // Railway環境での安定性設定
-      statement_timeout: 15000, // ステートメントタイムアウト
-      idle_in_transaction_session_timeout: 10000, // トランザクション内アイドルタイムアウト
-      // 接続リトライ設定
+      // Railway環境での超安定性設定
+      statement_timeout: 30000, // ステートメントタイムアウト延長
+      idle_in_transaction_session_timeout: 20000, // トランザクション内アイドルタイムアウト延長
+      // 接続リトライ設定強化
       keepAlive: true,
-      keepAliveInitialDelayMillis: 10000
+      keepAliveInitialDelayMillis: 30000
     });
 
-    // 非同期初期化を実行（リトライ機能付き）
-    this.initializeWithRetry(3).catch(error => {
+    // 非同期初期化を実行（強化されたリトライ機能付き）
+    this.initializeWithRetry(5).catch(error => {
       console.error('PostgreSQL初期化最終エラー:', error);
-      console.error('ボット起動を継続しますが、通貨機能は利用できません');
+      console.error('Railway環境での接続問題により、DB機能は無効化されます');
+      console.error('ボットは起動を継続しますが、通貨機能は利用できません');
     });
   }
 
   private async initializeWithRetry(maxRetries: number): Promise<void> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 30秒)`);
+        console.log(`PostgreSQL初期化試行 ${attempt}/${maxRetries} (タイムアウト: 60秒)`);
+        console.log('Railway環境での接続中... 時間がかかる場合があります');
         
-        // タイムアウト付きで初期化を実行（Railway用に延長）
+        // タイムアウト付きで初期化を実行（Railway用に大幅延長）
         await Promise.race([
           this.initializeTables(),
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Initialization timeout after 30 seconds')), 30000)
+            setTimeout(() => reject(new Error('Initialization timeout after 60 seconds')), 60000)
           )
         ]);
         
@@ -100,9 +102,9 @@ export class PostgreSQLDatabase {
           throw error; // 最後の試行で失敗した場合は例外を投げる
         }
         
-        // リトライ前に待機（指数バックオフ）
-        const initWaitTime = attempt * 2000; // 2秒、4秒、6秒...
-        console.log(`${initWaitTime}ms待機してからリトライします...`);
+        // リトライ前に待機（Railway用の長い指数バックオフ）
+        const initWaitTime = attempt * 5000; // 5秒、10秒、15秒、20秒、25秒...
+        console.log(`Railway環境での接続リトライ: ${initWaitTime}ms待機中...`);
         await new Promise(resolve => setTimeout(resolve, initWaitTime));
         
         // より短い待機時間（1秒、2秒のみ）
@@ -301,8 +303,8 @@ export class PostgreSQLDatabase {
 
   // 健全性チェック（リトライとタイムアウト機能付き）
   async healthCheck(): Promise<void> {
-    const maxRetries = 3;
-    const timeout = 15000; // 15秒タイムアウト
+    const maxRetries = 5;
+    const timeout = 30000; // 30秒タイムアウト（Railway対応）
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       let client: any = null;
@@ -323,7 +325,7 @@ export class PostgreSQLDatabase {
         await Promise.race([
           healthCheckPromise,
           new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Health check timeout after ${timeout}ms`)), timeout)
+            setTimeout(() => reject(new Error(`Railway health check timeout after ${timeout}ms`)), timeout)
           )
         ]);
         
@@ -336,9 +338,9 @@ export class PostgreSQLDatabase {
           throw new Error(`PostgreSQL health check failed after ${maxRetries} attempts: ${error instanceof Error ? error.message : String(error)}`);
         }
         
-        // 次の試行まで待機
-        const healthWaitTime = attempt * 1000; // 1秒、2秒、3秒
-        console.log(`${healthWaitTime}ms待機してからリトライします...`);
+        // 次の試行まで待機（Railway用に延長）
+        const healthWaitTime = attempt * 3000; // 3秒、6秒、9秒、12秒、15秒
+        console.log(`Railway環境でのヘルスチェックリトライ: ${healthWaitTime}ms待機中...`);
         await new Promise(resolve => setTimeout(resolve, healthWaitTime));
         
       } finally {
@@ -353,54 +355,79 @@ export class PostgreSQLDatabase {
     }
   }
 
+  // データベース操作用のエラーハンドリングヘルパー
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>, 
+    operationName: string, 
+    maxRetries: number = 3
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await Promise.race([
+          operation(),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`${operationName} timeout after 10 seconds`)), 10000)
+          )
+        ]);
+      } catch (error) {
+        console.error(`${operationName} 試行 ${attempt}/${maxRetries} 失敗:`, error);
+        
+        if (attempt === maxRetries) {
+          throw new Error(`${operationName} failed after ${maxRetries} attempts: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        
+        // 短い待機時間でリトライ
+        await new Promise(resolve => setTimeout(resolve, attempt * 500));
+      }
+    }
+    throw new Error('Unexpected execution path');
+  }
+
   // ユーザー関連メソッド
   async getUser(discordId: string): Promise<User | null> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        'SELECT * FROM users WHERE discord_id = $1',
-        [discordId]
-      );
-      return result.rows[0] || null;
-    } catch (error) {
-      console.error('Error in getUser:', error);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.executeWithRetry(async () => {
+      const client = await this.pool.connect();
+      try {
+        const result = await client.query(
+          'SELECT * FROM users WHERE discord_id = $1',
+          [discordId]
+        );
+        return result.rows[0] || null;
+      } finally {
+        client.release();
+      }
+    }, 'getUser');
   }
 
   async createUser(discordId: string): Promise<User> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        `INSERT INTO users (discord_id, balance) 
-         VALUES ($1, 10000) 
-         RETURNING *`,
-        [discordId]
-      );
-      return result.rows[0];
-    } catch (error) {
-      console.error('Error in createUser:', error);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.executeWithRetry(async () => {
+      const client = await this.pool.connect();
+      try {
+        const result = await client.query(
+          `INSERT INTO users (discord_id, balance) 
+           VALUES ($1, 10000) 
+           RETURNING *`,
+          [discordId]
+        );
+        return result.rows[0];
+      } finally {
+        client.release();
+      }
+    }, 'createUser');
   }
 
   async updateUserBalance(discordId: string, newBalance: number): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
-        [newBalance, discordId]
-      );
-    } catch (error) {
-      console.error('Error in updateUserBalance:', error);
-      throw error;
-    } finally {
-      client.release();
-    }
+    return this.executeWithRetry(async () => {
+      const client = await this.pool.connect();
+      try {
+        await client.query(
+          'UPDATE users SET balance = $1, updated_at = CURRENT_TIMESTAMP WHERE discord_id = $2',
+          [newBalance, discordId]
+        );
+      } finally {
+        client.release();
+      }
+    }, 'updateUserBalance');
   }
 
   // ユーザーの残高を設定（存在しない場合は作成）
