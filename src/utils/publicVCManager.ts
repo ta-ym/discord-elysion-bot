@@ -131,14 +131,25 @@ export async function showPublicVCCreationModal(interaction: ButtonInteraction):
  */
 export async function createPublicVC(interaction: any, vcName: string, vcDescription?: string): Promise<void> {
   const database = new Database();
+  
+  console.log(`[PUBLIC VC DEBUG] Starting VC creation for ${interaction.user.tag}`);
+  console.log(`[PUBLIC VC DEBUG] VC Name: "${vcName}", Description: "${vcDescription || 'none'}"`);
 
   try {
     const guild = interaction.guild;
-    if (!guild) return;
+    if (!guild) {
+      console.error('[PUBLIC VC ERROR] Guild not found');
+      return;
+    }
+    
+    console.log(`[PUBLIC VC DEBUG] Guild found: ${guild.name} (${guild.id})`);
 
     // チャンネル名のサニタイズ
     const sanitizedName = vcName.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF\-_]/g, '');
     const channelName = sanitizedName || `${interaction.user.username}の部屋`;
+    
+    console.log(`[PUBLIC VC DEBUG] Sanitized channel name: "${channelName}"`);
+    console.log(`[PUBLIC VC DEBUG] Creating channel in category: ${PUBLIC_VC_CATEGORY_ID}`);
 
     // 公開VCを作成
     const channel = await guild.channels.create({
@@ -171,8 +182,17 @@ export async function createPublicVC(interaction: any, vcName: string, vcDescrip
       ]
     });
 
+    console.log(`[PUBLIC VC DEBUG] Channel created successfully: ${channel.name} (${channel.id})`);
+    
     // DBに公開VC情報を記録
-    await database.addPublicVC(channel.id, interaction.user.id, channel.name, vcDescription);
+    console.log(`[PUBLIC VC DEBUG] Attempting to save to database...`);
+    try {
+      await database.addPublicVC(channel.id, interaction.user.id, channel.name, vcDescription);
+      console.log(`[PUBLIC VC DEBUG] Database save successful`);
+    } catch (dbError) {
+      console.error(`[PUBLIC VC ERROR] Database save failed:`, dbError);
+      throw dbError;
+    }
 
     // 成功メッセージ
     const successEmbed = new EmbedBuilder()
@@ -228,24 +248,55 @@ export async function createPublicVC(interaction: any, vcName: string, vcDescrip
     }
 
   } catch (error) {
-    console.error('公開VC作成エラー:', error);
+    console.error(`[PUBLIC VC ERROR] 公開VC作成エラー for ${interaction.user.tag}:`, error);
+    
+    // エラーの種類を特定
+    let errorMessage = '❌ 公開VC作成中にエラーが発生しました。';
+    let debugInfo = '';
+    
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        errorMessage = '❌ データベース接続がタイムアウトしました。Railway PostgreSQLの状態を確認してください。';
+        debugInfo = 'Database timeout';
+        console.error('[PUBLIC VC ERROR] Database timeout detected');
+      } else if (error.message.includes('Missing Permissions')) {
+        errorMessage = '❌ チャンネル作成権限が不足しています。管理者に連絡してください。';
+        debugInfo = 'Permission error';
+        console.error('[PUBLIC VC ERROR] Permission error detected');
+      } else if (error.message.includes('Unknown Channel')) {
+        errorMessage = '❌ 指定されたカテゴリが見つかりません。設定を確認してください。';
+        debugInfo = 'Category not found';
+        console.error('[PUBLIC VC ERROR] Category not found');
+      }
+      console.error(`[PUBLIC VC ERROR] Error details: ${error.message}`);
+      console.error(`[PUBLIC VC ERROR] Error stack:`, error.stack);
+      debugInfo += ` | ${error.constructor.name}`;
+    }
+    
+    // デバッグ用のエンベッドメッセージ
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#ff0000')
+      .setTitle('❌ 公開VC作成失敗')
+      .setDescription(errorMessage)
+      .addFields(
+        { name: '🐛 デバッグ情報', value: `${debugInfo}\\nタイムスタンプ: ${new Date().toISOString()}`, inline: false }
+      )
+      .setFooter({ text: 'エラーが続く場合は管理者にお知らせください' });
     
     // インタラクション応答のエラーハンドリング
-    const errorMessage = '❌ 公開VC作成中にエラーが発生しました。';
-    
     try {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: errorMessage,
+          embeds: [errorEmbed],
           ephemeral: true
         });
       } else if (interaction.deferred) {
         await interaction.editReply({
-          content: errorMessage
+          embeds: [errorEmbed]
         });
       }
     } catch (interactionError) {
-      console.error('インタラクション応答エラー:', interactionError);
+      console.error(`[PUBLIC VC ERROR] インタラクション応答エラー for ${interaction.user.tag}:`, interactionError);
     }
   }
 }

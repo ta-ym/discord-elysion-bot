@@ -1388,29 +1388,57 @@ export class PostgreSQLDatabase {
   }
 
   async addPublicVC(channelId: string, creatorId: string, channelName: string, description?: string): Promise<void> {
-    let client: Client | null = null;
-    client = new Client({
-      connectionString: this.connectionString,
-      ssl: process.env['NODE_ENV'] === 'production' ? {
-        rejectUnauthorized: false
-      } : false,
-      connectionTimeoutMillis: 10000,
-      statement_timeout: 8000,
-      query_timeout: 8000,
-      application_name: 'elysion-db-operation'
-    });
+    console.log(`[DB DEBUG] addPublicVC called: channel=${channelId}, creator=${creatorId}, name="${channelName}"`);
     
-    await client.connect();
+    let client: Client | null = null;
     try {
+      client = new Client({
+        connectionString: this.connectionString,
+        ssl: process.env['NODE_ENV'] === 'production' ? {
+          rejectUnauthorized: false
+        } : false,
+        connectionTimeoutMillis: 4000,  // 短縮
+        statement_timeout: 3000,        // 短縮
+        query_timeout: 3000,            // 短縮
+        application_name: 'elysion-add-public-vc'
+      });
+      
+      console.log(`[DB DEBUG] Attempting database connection for addPublicVC...`);
+      const startTime = Date.now();
+      
+      await client.connect();
+      const connectTime = Date.now() - startTime;
+      console.log(`[DB DEBUG] Database connection successful in ${connectTime}ms`);
+      
+      const queryStartTime = Date.now();
       await client.query(
         'INSERT INTO public_vcs (channel_id, creator_id, channel_name, description) VALUES ($1, $2, $3, $4)',
         [channelId, creatorId, channelName, description || '']
       );
+      const queryTime = Date.now() - queryStartTime;
+      console.log(`[DB DEBUG] addPublicVC query completed in ${queryTime}ms`);
+      
     } catch (error) {
-      console.error('Error in addPublicVC:', error);
+      console.error(`[DB ERROR] addPublicVC failed: channel=${channelId}, creator=${creatorId}`);
+      console.error(`[DB ERROR] Error details:`, error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          console.error(`[DB ERROR] Database timeout in addPublicVC`);
+        } else if (error.message.includes('connection')) {
+          console.error(`[DB ERROR] Connection error in addPublicVC`);
+        }
+      }
       throw error;
     } finally {
-      if (client) { await client.end(); }
+      if (client) {
+        try {
+          await client.end();
+          console.log(`[DB DEBUG] Database connection closed for addPublicVC`);
+        } catch (endError) {
+          console.error(`[DB ERROR] Error closing connection:`, endError);
+        }
+      }
     }
   }
 
