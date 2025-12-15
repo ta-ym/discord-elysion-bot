@@ -13,7 +13,7 @@ const rainbowPanelCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -24,7 +24,7 @@ const rainbowPanelCommand: Command = {
       console.error('Rainbow panel command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

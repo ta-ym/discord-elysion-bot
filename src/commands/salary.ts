@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits, Role, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { getActiveSalaryRoles, getSalaryByRoleId, getRoleDisplayName, getTotalSalaryByRoleIds } from '../config/salaryRoles';
 import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
@@ -30,7 +30,7 @@ const salaryCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -46,7 +46,7 @@ const salaryCommand: Command = {
       if (!targetMember) {
         await interaction.reply({
           content: '❌ 対象ユーザーがサーバーに見つかりません。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -61,7 +61,7 @@ const salaryCommand: Command = {
         if (!roleConfig) {
           await interaction.reply({
             content: `❌ 指定されたロール "${specifiedRole.name}" は給与設定されていません。\n\`/salary-config\` で設定を追加してください。`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -74,7 +74,7 @@ const salaryCommand: Command = {
         if (!roleConfig) {
           await interaction.reply({
             content: `❌ 指定されたロール "${specifiedRole.name}" は給与設定されていません。\n\`/salary-config\` で設定を追加してください。`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -89,7 +89,7 @@ const salaryCommand: Command = {
         if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) {
           await interaction.reply({
             content: `❌ ユーザーが給与対象ロールを持っていません。\n利用可能なロール: ${getActiveSalaryRoles().map(r => getRoleDisplayName(r.roleId)).join(', ')}`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -107,7 +107,7 @@ const salaryCommand: Command = {
         if (salaryInfo.totalSalary === 0 || !salaryInfo.primaryRole) {
           await interaction.reply({
             content: `❌ ユーザーが給与対象ロールを持っていません。\n利用可能なロール: ${getActiveSalaryRoles().map(r => getRoleDisplayName(r.roleId)).join(', ')}`,
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -151,14 +151,14 @@ const salaryCommand: Command = {
       await interaction.reply({
         embeds: [confirmEmbed],
         components: [row],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
 
     } catch (error) {
       console.error('Salary command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

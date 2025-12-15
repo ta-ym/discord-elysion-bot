@@ -79,7 +79,7 @@ const voiceStatsCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -90,7 +90,7 @@ const voiceStatsCommand: Command = {
     if (!tracker) {
       await interaction.reply({
         content: '❌ 通話時間追跡システムが初期化されていません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -109,14 +109,14 @@ const voiceStatsCommand: Command = {
         default:
           await interaction.reply({
             content: '❌ 不明なサブコマンドです。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
       }
     } catch (error) {
       console.error('Voice stats command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -172,7 +172,7 @@ async function handleRanking(interaction: ChatInputCommandInteraction, tracker: 
   if (ranking.length === 0) {
     await interaction.reply({
       content: '📭 指定期間に天使ロールでの通話記録がありません。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }

@@ -27,7 +27,7 @@ const payCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -42,7 +42,7 @@ const payCommand: Command = {
       if (!targetMember) {
         await interaction.reply({
           content: '❌ 対象ユーザーがサーバーに見つかりません。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -51,7 +51,7 @@ const payCommand: Command = {
       if (targetUser.id === interaction.user.id) {
         await interaction.reply({
           content: '❌ 自分に支払うことはできません。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -60,7 +60,7 @@ const payCommand: Command = {
       if (targetUser.bot) {
         await interaction.reply({
           content: '❌ ボットに支払うことはできません。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -112,14 +112,14 @@ const payCommand: Command = {
       await interaction.reply({
         embeds: [confirmEmbed],
         components: [row],
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
 
     } catch (error) {
       console.error('Pay command error:', error);
       await interaction.reply({
         content: '❌ 支払い処理中にエラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

@@ -9,7 +9,8 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
 import { sendVCCreationLog } from './ruLogger';
@@ -43,7 +44,7 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
   
   try {
     // 最初にインタラクションを延期（3秒制限を回避）
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const channelName = interaction.fields.getTextInputValue('channel_name');
     
@@ -230,7 +231,7 @@ export async function createTempVC(interaction: ModalSubmitInteraction, planType
       if (interaction.deferred) {
         await interaction.editReply({ embeds: [errorEmbed] });
       } else if (!interaction.replied) {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     } catch (replyError) {
       console.error('Error sending error reply:', replyError);
@@ -494,7 +495,7 @@ export async function changeVCLimit(interaction: any, newLimit: number): Promise
     if (!channel || channel.type !== ChannelType.GuildVoice) {
       await interaction.reply({
         content: '❌ この機能はボイスチャンネルでのみ使用できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -506,7 +507,7 @@ export async function changeVCLimit(interaction: any, newLimit: number): Promise
     if (!tempVC) {
       await interaction.reply({
         content: '❌ この機能は一時VCでのみ使用できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -515,7 +516,7 @@ export async function changeVCLimit(interaction: any, newLimit: number): Promise
     if (tempVC.creator_id !== interaction.user.id) {
       await interaction.reply({
         content: '❌ VC設定は作成者のみ変更できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -536,7 +537,7 @@ export async function changeVCLimit(interaction: any, newLimit: number): Promise
     console.error('Error changing VC limit:', error);
     await interaction.reply({
       content: '❌ 設定変更中にエラーが発生しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }

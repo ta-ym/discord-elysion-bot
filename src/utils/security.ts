@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, GuildMember, PermissionFlagsBits } from 'discord.js';
+import { ChatInputCommandInteraction, GuildMember, PermissionFlagsBits, MessageFlags } from 'discord.js';
 
 export class SecurityUtils {
   // 管理者権限チェック
@@ -91,9 +91,9 @@ export class ErrorHandler {
     
     try {
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: errorMessage, ephemeral: true });
+        await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral });
       } else {
-        await interaction.reply({ content: errorMessage, ephemeral: true });
+        await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral });
       }
     } catch (replyError) {
       console.error('[ERROR] Failed to send error message:', replyError);

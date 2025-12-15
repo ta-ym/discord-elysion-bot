@@ -32,7 +32,7 @@ const transferCommand: Command = {
       if (!SecurityUtils.checkRateLimit(interaction.user.id, 3, 60000)) {
         await interaction.reply({ 
           content: '❌ 送金回数が制限を超えています。1分後に再度お試しください。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -46,7 +46,7 @@ const transferCommand: Command = {
       if (!amountValidation.valid) {
         await interaction.reply({ 
           content: `❌ ${amountValidation.error}`, 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -57,7 +57,7 @@ const transferCommand: Command = {
       if (targetUser.id === interaction.user.id) {
         await interaction.reply({ 
           content: '❌ 自分自身には送金できません。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -66,7 +66,7 @@ const transferCommand: Command = {
       if (targetUser.bot) {
         await interaction.reply({ 
           content: '❌ ボットには送金できません。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -80,7 +80,7 @@ const transferCommand: Command = {
       if (sender.balance < amount) {
         await interaction.reply({ 
           content: `❌ 残高が不足しています。\n現在の残高: ${sender.balance.toLocaleString()} Ru`, 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -115,7 +115,7 @@ const transferCommand: Command = {
       await interaction.reply({ 
         embeds: [confirmEmbed], 
         components: [confirmRow], 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
 
       // ボタンインタラクションを待機

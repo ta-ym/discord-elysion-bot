@@ -9,7 +9,7 @@ const balanceCommand: Command = {
   
   async execute(interaction: ChatInputCommandInteraction) {
     // 最初に応答を延期（3秒のタイムアウト防止）
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     
     const database = globalDatabase;
     

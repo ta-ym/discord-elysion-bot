@@ -12,7 +12,7 @@ const pingCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }

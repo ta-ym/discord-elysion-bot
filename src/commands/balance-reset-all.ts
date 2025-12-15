@@ -43,13 +43,13 @@ export async function execute(interaction: CommandInteraction) {
   if (!hasAdminPermission(interaction.user.id)) {
     await interaction.reply({
       content: getAdminPermissionErrorMessage(),
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
 
   // インタラクションを先にdeferして15分の時間制限を確保
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const confirmation = interaction.options.getString('confirmation');

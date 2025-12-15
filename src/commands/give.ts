@@ -29,7 +29,7 @@ const giveCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -112,7 +112,7 @@ const giveCommand: Command = {
       console.error('Error in give command:', error);
       await interaction.reply({ 
         content: '❌ Ru_men付与中にエラーが発生しました。', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
     }
   },

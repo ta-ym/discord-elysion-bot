@@ -1,4 +1,4 @@
-import { Events } from 'discord.js';
+import { Events, MessageFlags } from 'discord.js';
 import { Event } from '../types';
 import { createTempVC } from '../utils/tempVCManager';
 import { createPublicVC } from '../utils/publicVCManager';
@@ -47,7 +47,7 @@ const modalInteractionEvent: Event = {
         if (!channel || channel.type !== 2) { // GuildVoice = 2
           await interaction.reply({
             content: '❌ チャンネルが見つからないか、音声チャンネルではありません。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -59,7 +59,7 @@ const modalInteractionEvent: Event = {
         if (!cloneVCManager) {
           await interaction.reply({
             content: '❌ 複製VC管理システムが利用できません。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -84,7 +84,7 @@ const modalInteractionEvent: Event = {
         if (!isCreator && !hasPrivilegedRole) {
           await interaction.reply({
             content: '❌ チャンネル名を変更する権限がありません。（作成者または特権ロールが必要）',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -101,7 +101,7 @@ const modalInteractionEvent: Event = {
 
           await interaction.reply({
             embeds: [successEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
 
           console.log(`[CLONE VC] Successfully renamed channel ${channelId} to "${newChannelName}" by ${interaction.user.tag}`);
@@ -117,7 +117,7 @@ const modalInteractionEvent: Event = {
 
           await interaction.reply({
             embeds: [errorEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
         }
         return;
@@ -135,7 +135,7 @@ const modalInteractionEvent: Event = {
         if (!channel || channel.type !== 2) { // GuildVoice = 2
           await interaction.reply({
             content: '❌ チャンネルが見つからないか、音声チャンネルではありません。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -147,7 +147,7 @@ const modalInteractionEvent: Event = {
         if (!cloneVCManager) {
           await interaction.reply({
             content: '❌ 複製VC管理システムが利用できません。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -172,7 +172,7 @@ const modalInteractionEvent: Event = {
         if (!isCreator && !hasPrivilegedRole) {
           await interaction.reply({
             content: '❌ チャンネルステータスを変更する権限がありません。（作成者または特権ロールが必要）',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -192,7 +192,7 @@ const modalInteractionEvent: Event = {
 
           await interaction.reply({
             embeds: [successEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
 
           console.log(`[CLONE VC] Successfully changed channel status ${channelId} to "${newChannelStatus}" by ${interaction.user.tag}`);
@@ -208,7 +208,7 @@ const modalInteractionEvent: Event = {
 
           await interaction.reply({
             embeds: [errorEmbed],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
         }
         return;
@@ -217,7 +217,7 @@ const modalInteractionEvent: Event = {
     } catch (error) {
       console.error('Error in modal interaction:', error);
       try {
-        await interaction.reply({ content: '❌ 処理中にエラーが発生しました。', ephemeral: true });
+        await interaction.reply({ content: '❌ 処理中にエラーが発生しました。', flags: MessageFlags.Ephemeral });
       } catch (replyError) {
         console.error('Error sending error reply:', replyError);
       }

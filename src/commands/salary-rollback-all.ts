@@ -33,7 +33,7 @@ export async function execute(interaction: CommandInteraction) {
   if (!hasAdminPermission(interaction.user.id)) {
     await interaction.reply({
       content: getAdminPermissionErrorMessage(),
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }

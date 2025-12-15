@@ -13,7 +13,7 @@ const tempVcPanelCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -24,12 +24,12 @@ const tempVcPanelCommand: Command = {
       if (success) {
         await interaction.reply({
           content: '✅ 一時VC作成パネルを再送信しました。\n（古いパネルがあれば削除されました）',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       } else {
         await interaction.reply({
           content: '❌ パネルの送信に失敗しました。チャンネルが見つからない可能性があります。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
 
@@ -37,7 +37,7 @@ const tempVcPanelCommand: Command = {
       console.error('Temp VC panel command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

@@ -24,7 +24,7 @@ const cloneVCCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -37,7 +37,7 @@ const cloneVCCommand: Command = {
       if (!cloneVCManager) {
         await interaction.reply({
           content: '❌ 複製VC管理システムが初期化されていません。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -90,9 +90,9 @@ const cloneVCCommand: Command = {
       }
 
       if (subcommand === 'status') {
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       } else if (subcommand === 'cleanup-empty') {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         
         try {
           const guild = interaction.guild;
@@ -180,7 +180,7 @@ const cloneVCCommand: Command = {
       if (interaction.deferred) {
         await interaction.editReply({ embeds: [errorEmbed] });
       } else {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
   },

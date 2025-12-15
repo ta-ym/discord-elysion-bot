@@ -1,4 +1,4 @@
-import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { Events, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags } from 'discord.js';
 import { Event, BulkSalaryResult } from '../types';
 import {
   showPublicVCCreationModal,
@@ -47,7 +47,7 @@ const buttonInteractionEvent: Event = {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
               content: '⏳ 処理中です。しばらくお待ちください...',
-              ephemeral: true
+              flags: MessageFlags.Ephemeral
             });
           }
         } catch (error) {
@@ -136,7 +136,7 @@ const buttonInteractionEvent: Event = {
           await interaction.reply({
             embeds: [planEmbed],
             components: [planButtons],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           console.log(`[TEMP VC] Plan selection shown to ${interaction.user.tag}`);
           return;
@@ -276,7 +276,7 @@ const buttonInteractionEvent: Event = {
           default:
             await interaction.reply({
               content: '❌ 無効な人数設定です。',
-              ephemeral: true
+              flags: MessageFlags.Ephemeral
             });
             return;
         }
@@ -299,7 +299,7 @@ const buttonInteractionEvent: Event = {
         if (parts.length !== 5) { // pay_confirm_{userId}_{amount}_{timestamp}
           await interaction.reply({
             content: '❌ 無効な支払い情報です。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -310,7 +310,7 @@ const buttonInteractionEvent: Event = {
         if (isNaN(amount) || amount <= 0) {
           await interaction.reply({
             content: '❌ 無効な金額です。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -363,7 +363,7 @@ const buttonInteractionEvent: Event = {
             } else {
               await interaction.reply({
                 content: '❌ 支払い処理中にエラーが発生しました。',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
               });
             }
           } catch (replyError) {
@@ -403,7 +403,7 @@ const buttonInteractionEvent: Event = {
         if (parts.length !== 6) { // salary_rollback_confirm_{userId}_{month}_{adminId}
           await interaction.reply({
             content: '❌ 無効なロールバック情報です。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -416,7 +416,7 @@ const buttonInteractionEvent: Event = {
         if (interaction.user.id !== adminId) {
           await interaction.reply({
             content: '❌ この操作を実行する権限がありません。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -555,7 +555,7 @@ const buttonInteractionEvent: Event = {
           console.error(`[BALANCE-RESET-ALL] Invalid target amount: ${targetAmountStr}`);
           await interaction.reply({
             content: '❌ 無効な金額設定です。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -635,7 +635,7 @@ const buttonInteractionEvent: Event = {
         }
 
         try {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           
           // データベースから最新の一斉給与結果を取得
           const { globalDatabase } = await import('../index');
@@ -727,7 +727,7 @@ const buttonInteractionEvent: Event = {
         }
 
         try {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
           
           // データベースから最新の一斉給与結果を取得
           const { globalDatabase } = await import('../index');
@@ -844,7 +844,7 @@ const buttonInteractionEvent: Event = {
         }
 
         try {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
           // 現在の月を取得（または最近の分析結果から）
           const currentMonth = new Date().toISOString().slice(0, 7);
@@ -970,7 +970,7 @@ const buttonInteractionEvent: Event = {
 
         await interaction.reply({
           content: '⚠️ 支給済みユーザーの詳細表示機能は現在開発中です。\n`/salary-bulk preview:true` コマンドで基本情報をご確認いただけます。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -985,7 +985,7 @@ const buttonInteractionEvent: Event = {
 
         await interaction.reply({
           content: '⚠️ ロール別集計機能は現在開発中です。\n`/salary-bulk preview:true` コマンドで基本情報をご確認いただけます。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -1034,14 +1034,14 @@ const buttonInteractionEvent: Event = {
           await interaction.reply({
             embeds: [confirmEmbed],
             components: [confirmRow],
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           
         } catch (error) {
           console.error('[SALARY-BULK-EXECUTE] Error showing confirmation:', error);
           await interaction.reply({
             content: '❌ 確認画面の表示中にエラーが発生しました。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
         }
         return;
@@ -1130,7 +1130,7 @@ const buttonInteractionEvent: Event = {
         
         await interaction.reply({
           content: '❌ エラーが発生しました。しばらく待ってから再度お試しください。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       } catch (replyError) {
         console.error('[BUTTON] Failed to send error reply:', replyError);

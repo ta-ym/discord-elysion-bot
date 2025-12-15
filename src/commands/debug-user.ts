@@ -12,7 +12,7 @@ const debugCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -47,7 +47,7 @@ const debugCommand: Command = {
       roles: userRoles
     });
 
-    await interaction.reply({ embeds: [debugEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [debugEmbed], flags: MessageFlags.Ephemeral });
   },
 };
 

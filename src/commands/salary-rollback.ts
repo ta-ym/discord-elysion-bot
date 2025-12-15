@@ -33,7 +33,7 @@ export async function execute(interaction: CommandInteraction) {
   if (!hasAdminPermission(interaction.user.id)) {
     await interaction.reply({
       content: getAdminPermissionErrorMessage(),
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -48,7 +48,7 @@ export async function execute(interaction: CommandInteraction) {
     if (monthOption && !/^\d{4}-\d{2}$/.test(monthOption)) {
       await interaction.reply({
         content: '❌ 月の形式が正しくありません。YYYY-MM形式で入力してください。（例: 2024-01）',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -61,7 +61,7 @@ export async function execute(interaction: CommandInteraction) {
     if (!salaryRecord) {
       await interaction.reply({
         content: `❌ ${targetUser.displayName} さんの ${targetMonth} の月給支給記録が見つかりません。`,
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -98,7 +98,7 @@ export async function execute(interaction: CommandInteraction) {
     await interaction.reply({
       embeds: [confirmEmbed],
       components: [confirmRow],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
   } catch (error) {
@@ -107,7 +107,7 @@ export async function execute(interaction: CommandInteraction) {
     try {
       await interaction.reply({
         content: '❌ 月給ロールバック処理中にエラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } catch (replyError) {
       console.error('[SALARY-ROLLBACK] Failed to send error reply:', replyError);

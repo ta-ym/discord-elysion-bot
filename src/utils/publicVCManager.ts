@@ -10,7 +10,8 @@ import {
   ChatInputCommandInteraction,
   ChannelType,
   PermissionFlagsBits,
-  GuildMember
+  GuildMember,
+  MessageFlags
 } from 'discord.js';
 import { Database } from '../database';
 
@@ -57,14 +58,14 @@ export async function sendPublicVCPanel(interaction: ChatInputCommandInteraction
       if (interaction.isRepliable()) {
         await interaction.reply({ 
           content: '✅ 公開VC管理パネルを虹色の楽園に送信しました。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
       }
     } else {
       if (interaction.isRepliable()) {
         await interaction.reply({ 
           content: '❌ 虹色の楽園スレッドが見つかりません。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
       }
     }
@@ -73,7 +74,7 @@ export async function sendPublicVCPanel(interaction: ChatInputCommandInteraction
     if (interaction.isRepliable()) {
       await interaction.reply({ 
         content: '❌ 公開VC管理パネルの送信に失敗しました。', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
     }
   }
@@ -118,7 +119,7 @@ export async function showPublicVCCreationModal(interaction: ButtonInteraction):
     try {
       await interaction.reply({
         content: '❌ モーダル表示中にエラーが発生しました。もう一度お試しください。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     } catch (replyError) {
       console.error('エラー応答に失敗:', replyError);
@@ -224,7 +225,7 @@ export async function createPublicVC(interaction: any, vcName: string, vcDescrip
     await interaction.reply({
       embeds: [successEmbed],
       components: [controlButtons],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
     // 虹色の楽園スレッドにも通知
@@ -288,7 +289,7 @@ export async function createPublicVC(interaction: any, vcName: string, vcDescrip
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           embeds: [errorEmbed],
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       } else if (interaction.deferred) {
         await interaction.editReply({
@@ -313,7 +314,7 @@ export async function showPublicVCList(interaction: ButtonInteraction): Promise<
     if (publicVCs.length === 0) {
       await interaction.reply({
         content: '📭 現在、公開VCはありません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -335,7 +336,7 @@ export async function showPublicVCList(interaction: ButtonInteraction): Promise<
 
     await interaction.reply({
       embeds: [listEmbed],
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
   } catch (error) {
@@ -347,7 +348,7 @@ export async function showPublicVCList(interaction: ButtonInteraction): Promise<
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: errorMessage,
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
     } catch (interactionError) {
@@ -367,7 +368,7 @@ export async function deletePublicVC(interaction: ButtonInteraction, channelId: 
     if (!vcInfo) {
       await interaction.reply({
         content: '❌ 指定された公開VCが見つかりません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -380,7 +381,7 @@ export async function deletePublicVC(interaction: ButtonInteraction, channelId: 
     if (!isCreator && !isAdmin) {
       await interaction.reply({
         content: '❌ この公開VCを削除する権限がありません。作成者または管理者のみ削除できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -396,7 +397,7 @@ export async function deletePublicVC(interaction: ButtonInteraction, channelId: 
 
     await interaction.reply({
       content: '✅ 公開VCを削除しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
     // 虹色の楽園スレッドに削除通知
@@ -429,12 +430,12 @@ export async function deletePublicVC(interaction: ButtonInteraction, channelId: 
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: errorMessage,
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       } else if (interaction.deferred || interaction.replied) {
         await interaction.followUp({
           content: errorMessage,
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
     } catch (interactionError) {
@@ -454,7 +455,7 @@ export async function showPublicVCEditModal(interaction: ButtonInteraction, chan
     if (!vcInfo) {
       await interaction.reply({
         content: '❌ 指定された公開VCが見つかりません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -463,7 +464,7 @@ export async function showPublicVCEditModal(interaction: ButtonInteraction, chan
     if (vcInfo.creator_id !== interaction.user.id) {
       await interaction.reply({
         content: '❌ この公開VCの設定を変更する権限がありません。作成者のみ変更できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -504,7 +505,7 @@ export async function showPublicVCEditModal(interaction: ButtonInteraction, chan
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: errorMessage,
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
       }
     } catch (interactionError) {

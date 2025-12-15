@@ -65,7 +65,7 @@ const specialVCStatsCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -76,7 +76,7 @@ const specialVCStatsCommand: Command = {
     if (!tracker) {
       await interaction.reply({
         content: '❌ 特別VC追跡システムが初期化されていません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -92,14 +92,14 @@ const specialVCStatsCommand: Command = {
         default:
           await interaction.reply({
             content: '❌ 不明なサブコマンドです。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
       }
     } catch (error) {
       console.error('Special VC stats command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -165,7 +165,7 @@ async function handleRanking(interaction: ChatInputCommandInteraction, tracker: 
   if (ranking.length === 0) {
     await interaction.reply({
       content: '📭 指定期間に回廊・評価VCの記録がありません。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }

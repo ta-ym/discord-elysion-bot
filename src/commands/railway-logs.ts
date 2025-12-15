@@ -43,7 +43,7 @@ module.exports = {
         if (!hasAdminPermission(interaction.user.id)) {
             await interaction.reply({
                 content: getAdminPermissionErrorMessage(),
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
@@ -66,7 +66,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
 
                     await interaction.reply({
                         content: statusMessage,
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                     break;
                 }
@@ -77,7 +77,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
                     if (!status.isConfigured) {
                         await interaction.reply({
                             content: '❌ Railway API設定が完了していません。\n.envファイルでRAILWAY_TOKEN、RAILWAY_PROJECT_ID、RAILWAY_SERVICE_IDを設定してください。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                         return;
                     }
@@ -85,7 +85,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
                     if (status.isPolling) {
                         await interaction.reply({
                             content: '⚠️ Railway ログポーリングは既に実行中です。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                         return;
                     }
@@ -95,7 +95,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
 
                     await interaction.reply({
                         content: `✅ Railway ログポーリングを開始しました。\n📡 間隔: ${interval}秒`,
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                     break;
                 }
@@ -106,7 +106,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
                     if (!status.isPolling) {
                         await interaction.reply({
                             content: '⚠️ Railway ログポーリングは停止中です。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                         return;
                     }
@@ -115,7 +115,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
 
                     await interaction.reply({
                         content: '✅ Railway ログポーリングを停止しました。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
                     break;
                 }
@@ -126,12 +126,12 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
                     if (!status.isConfigured) {
                         await interaction.reply({
                             content: '❌ Railway API設定が完了していません。',
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         });
                         return;
                     }
 
-                    await interaction.deferReply({ ephemeral: true });
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
                     const limit = interaction.options.getInteger('limit') || 10;
                     
@@ -152,7 +152,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
                 default:
                     await interaction.reply({
                         content: '❌ 不明なサブコマンドです。',
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral
                     });
             }
         } catch (error) {
@@ -161,7 +161,7 @@ ${!status.isConfigured ? '⚠️ Railway API設定が必要です (.envファイ
             if (!interaction.replied && !interaction.deferred) {
                 await interaction.reply({
                     content: '❌ コマンドの実行中にエラーが発生しました。',
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         }

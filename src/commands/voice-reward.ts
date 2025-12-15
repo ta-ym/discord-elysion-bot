@@ -66,7 +66,7 @@ const voiceRewardCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -78,7 +78,7 @@ const voiceRewardCommand: Command = {
     if (!tracker) {
       await interaction.reply({
         content: '❌ 通話時間追跡システムが初期化されていません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -94,14 +94,14 @@ const voiceRewardCommand: Command = {
         default:
           await interaction.reply({
             content: '❌ 不明なサブコマンドです。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
       }
     } catch (error) {
       console.error('Voice reward command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -120,7 +120,7 @@ async function handleIndividualPay(interaction: ChatInputCommandInteraction, dat
   if (stats.angelRoleMinutes === 0) {
     await interaction.reply({
       content: `❌ ${targetUser.displayName}は指定期間に天使ロールでの通話記録がありません。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -162,7 +162,7 @@ async function handleIndividualPay(interaction: ChatInputCommandInteraction, dat
     console.error('Payment error:', error);
     await interaction.reply({
       content: '❌ 支払い処理中にエラーが発生しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -183,7 +183,7 @@ async function handlePreview(interaction: ChatInputCommandInteraction, tracker: 
   if (eligibleUsers.length === 0) {
     await interaction.reply({
       content: `📭 指定期間に${minMinutes}分以上通話した天使ロールユーザーが見つかりません。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -223,7 +223,7 @@ async function handlePreview(interaction: ChatInputCommandInteraction, tracker: 
     previewEmbed.addFields({ name: '📊 支払い詳細', value: detailText, inline: false });
   }
 
-  await interaction.reply({ embeds: [previewEmbed], ephemeral: true });
+  await interaction.reply({ embeds: [previewEmbed], flags: MessageFlags.Ephemeral });
 }
 
 // ユーティリティ関数

@@ -24,7 +24,7 @@ const salaryHistoryCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -40,7 +40,7 @@ const salaryHistoryCommand: Command = {
         if (!member?.permissions.has(PermissionFlagsBits.Administrator)) {
           await interaction.reply({
             content: '❌ 他のユーザーの履歴を確認するには管理者権限が必要です。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
           return;
         }
@@ -57,7 +57,7 @@ const salaryHistoryCommand: Command = {
         console.error('Database connection error in salary-history:', dbError);
         await interaction.reply({
           content: '❌ データベース接続エラーが発生しました。PostgreSQL接続を確認してください。\n管理者にお問い合わせください。',
-          ephemeral: true
+          flags: MessageFlags.Ephemeral
         });
         return;
       }
@@ -69,7 +69,7 @@ const salaryHistoryCommand: Command = {
         
         await interaction.reply({ 
           content: message, 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -132,13 +132,13 @@ const salaryHistoryCommand: Command = {
         });
       }
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
     } catch (error) {
       console.error('Error in salary-history command:', error);
       await interaction.reply({ 
         content: '❌ 月給履歴の取得中にエラーが発生しました。', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
     }
   },

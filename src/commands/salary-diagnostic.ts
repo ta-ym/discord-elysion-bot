@@ -17,7 +17,7 @@ const salaryDiagnosticCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -28,7 +28,7 @@ const salaryDiagnosticCommand: Command = {
     if (!guild) {
       await interaction.reply({
         content: '❌ このコマンドはサーバー内でのみ使用できます。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -119,13 +119,13 @@ const salaryDiagnosticCommand: Command = {
       diagnosticEmbed.setFooter({ text: '給与計算システム診断' });
       diagnosticEmbed.setTimestamp();
 
-      await interaction.reply({ embeds: [diagnosticEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [diagnosticEmbed], flags: MessageFlags.Ephemeral });
 
     } catch (error) {
       console.error('Salary diagnostic error:', error);
       await interaction.reply({
         content: '❌ 診断中にエラーが発生しました。ユーザーがサーバーに存在するか確認してください。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },

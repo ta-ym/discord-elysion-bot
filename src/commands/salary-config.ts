@@ -75,7 +75,7 @@ const salaryConfigCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -102,14 +102,14 @@ const salaryConfigCommand: Command = {
         default:
           await interaction.reply({
             content: '❌ 無効なサブコマンドです。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
       }
     } catch (error) {
       console.error('Error in salary-config command:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   },
@@ -121,7 +121,7 @@ async function handleList(interaction: ChatInputCommandInteraction): Promise<voi
   if (activeRoles.length === 0) {
     await interaction.reply({
       content: '📝 設定された給与ロールがありません。\n`/salary-config add` で新しいロールを追加してください。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -147,7 +147,7 @@ async function handleList(interaction: ChatInputCommandInteraction): Promise<voi
     text: `合計 ${activeRoles.length} ロール設定済み` 
   });
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function handleSet(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -159,7 +159,7 @@ async function handleSet(interaction: ChatInputCommandInteraction): Promise<void
   if (!existingRole) {
     await interaction.reply({
       content: `❌ ロール "${role.name}" の給与設定が見つかりません。新しいロールを追加する場合は \`/salary-config add\` を使用してください。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -180,11 +180,11 @@ async function handleSet(interaction: ChatInputCommandInteraction): Promise<void
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   } else {
     await interaction.reply({
       content: '❌ ロール設定の更新に失敗しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -198,7 +198,7 @@ async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void
   if (existingRole) {
     await interaction.reply({
       content: `❌ ロール "${role.name}" は既に給与設定されています。設定を変更する場合は \`/salary-config set\` を使用してください。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -224,11 +224,11 @@ async function handleAdd(interaction: ChatInputCommandInteraction): Promise<void
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   } else {
     await interaction.reply({
       content: '❌ ロールの追加に失敗しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -240,7 +240,7 @@ async function handleRemove(interaction: ChatInputCommandInteraction): Promise<v
   if (!existingRole) {
     await interaction.reply({
       content: `❌ ロール "${role.name}" の給与設定が見つかりません。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -258,11 +258,11 @@ async function handleRemove(interaction: ChatInputCommandInteraction): Promise<v
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   } else {
     await interaction.reply({
       content: '❌ ロール設定の削除に失敗しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }
@@ -274,7 +274,7 @@ async function handleToggle(interaction: ChatInputCommandInteraction): Promise<v
   if (!existingRole) {
     await interaction.reply({
       content: `❌ ロール "${role.name}" の給与設定が見つかりません。`,
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
     return;
   }
@@ -293,11 +293,11 @@ async function handleToggle(interaction: ChatInputCommandInteraction): Promise<v
       )
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   } else {
     await interaction.reply({
       content: '❌ ロールステータスの変更に失敗しました。',
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
   }
 }

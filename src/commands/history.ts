@@ -19,7 +19,7 @@ const historyCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -40,7 +40,7 @@ const historyCommand: Command = {
       if (transactions.length === 0) {
         await interaction.reply({ 
           content: '📋 取引履歴はありません。', 
-          ephemeral: true 
+          flags: MessageFlags.Ephemeral 
         });
         return;
       }
@@ -94,13 +94,13 @@ const historyCommand: Command = {
         });
       }
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       
     } catch (error) {
       console.error('Error in history command:', error);
       await interaction.reply({ 
         content: '❌ 取引履歴の取得中にエラーが発生しました。', 
-        ephemeral: true 
+        flags: MessageFlags.Ephemeral 
       });
     }
   },

@@ -32,7 +32,7 @@ const angelConfigCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -50,14 +50,14 @@ const angelConfigCommand: Command = {
         default:
           await interaction.reply({
             content: '❌ 不明なサブコマンドです。',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
           });
       }
     } catch (error) {
       console.error('Angel config command error:', error);
       await interaction.reply({
         content: '❌ エラーが発生しました。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
     }
   }
@@ -98,7 +98,7 @@ async function handleShowConfig(interaction: ChatInputCommandInteraction): Promi
 
   configEmbed.addFields({ name: '📊 報酬例', value: examples, inline: false });
 
-  await interaction.reply({ embeds: [configEmbed], ephemeral: true });
+  await interaction.reply({ embeds: [configEmbed], flags: MessageFlags.Ephemeral });
 }
 
 /**
@@ -131,7 +131,7 @@ async function handleTestReward(interaction: ChatInputCommandInteraction): Promi
     });
   }
 
-  await interaction.reply({ embeds: [testEmbed], ephemeral: true });
+  await interaction.reply({ embeds: [testEmbed], flags: MessageFlags.Ephemeral });
 }
 
 /**

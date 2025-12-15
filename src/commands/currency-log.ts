@@ -39,7 +39,7 @@ const currencyLogCommand: Command = {
     if (!hasAdminPermission(interaction.user.id)) {
       await interaction.reply({
         content: getAdminPermissionErrorMessage(),
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
@@ -47,7 +47,7 @@ const currencyLogCommand: Command = {
     if (!logger) {
       await interaction.reply({
         content: '❌ 通貨ログシステムが初期化されていません。',
-        ephemeral: true
+        flags: MessageFlags.Ephemeral
       });
       return;
     }
