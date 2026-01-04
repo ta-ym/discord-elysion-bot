@@ -3,7 +3,8 @@ import { GuildMember, CommandInteraction, EmbedBuilder, MessageFlags } from 'dis
 // 管理者専用ユーザーIDリスト
 export const ADMIN_USER_IDS = [
   '690378679985111090',
-  '1337300895188258816'
+  '1337300895188258816',
+  '1399264907312234590'
 ];
 
 // 一般ユーザーが使用可能なコマンド
