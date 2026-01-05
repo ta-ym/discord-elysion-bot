@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { getSpecialVCTracker } from '../utils/specialVCTracker';
 import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';

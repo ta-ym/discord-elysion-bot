@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, MessageFlags } from 'discord.js';
 import { railwayLogger } from '../utils/railwayLogger';
 import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';
 

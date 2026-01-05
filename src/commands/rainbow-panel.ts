@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { sendPublicVCPanel } from '../utils/publicVCManager';
 import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';

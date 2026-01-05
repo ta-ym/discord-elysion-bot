@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { getVoiceTimeTracker } from '../utils/voiceTimeTracker';
 import { getAngelRoleConfig, calculateVoiceReward } from '../config/angelRole';

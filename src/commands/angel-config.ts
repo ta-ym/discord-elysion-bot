@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { getAngelRoleConfig, ANGEL_ROLE_CONFIG } from '../config/angelRole';
 import { hasAdminPermission, getAdminPermissionErrorMessage } from '../utils/permissions';

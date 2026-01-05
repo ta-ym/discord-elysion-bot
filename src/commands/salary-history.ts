@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, GuildMember } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, PermissionFlagsBits, GuildMember, MessageFlags } from 'discord.js';
 import { Command } from '../types';
 import { Database } from '../database';
 import { getRoleDisplayName } from '../config/salaryRoles';

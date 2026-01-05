@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Events, MessageFlags } from 'discord.js';
 import { Command, Event } from './types';
 import { Database } from './database';
 import { TempVCManager } from './utils/tempVCManagerClass';
